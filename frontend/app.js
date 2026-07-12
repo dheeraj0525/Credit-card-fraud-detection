@@ -149,6 +149,9 @@ function renderShell(contentHtml) {
                     <li class="menu-item ${activeRoute.startsWith("#/upload") ? "active" : ""}">
                         <a href="#/upload"><i class="fa-solid fa-file-csv"></i> CSV Upload</a>
                     </li>
+                    <li class="menu-item ${activeRoute.startsWith("#/history") ? "active" : ""}">
+                        <a href="#/history"><i class="fa-solid fa-clock-rotate-left"></i> History</a>
+                    </li>
                     <li class="menu-item ${activeRoute.startsWith("#/analytics") ? "active" : ""}">
                         <a href="#/analytics"><i class="fa-solid fa-magnifying-glass-chart"></i> Analytics</a>
                     </li>
@@ -232,7 +235,9 @@ const LoginView = {
                             </div>
                         </div>
                         
-                        <button type="submit" class="btn"><i class="fa-solid fa-right-to-bracket"></i> Log In</button>
+                        <button type="submit" class="btn" id="btn-login-submit">
+                            <i class="fa-solid fa-right-to-bracket"></i> Log In
+                        </button>
                     </form>
                     
                     <div class="auth-footer">
@@ -247,8 +252,13 @@ const LoginView = {
         if (form) {
             form.addEventListener("submit", async (e) => {
                 e.preventDefault();
+                const submitBtn = document.getElementById("btn-login-submit");
                 const email = document.getElementById("login-email").value;
                 const password = document.getElementById("login-password").value;
+                
+                // Loading State
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = `<div class="loader" style="width:16px; height:16px; border-width:2px; margin:0;"></div> Checking...`;
                 
                 try {
                     const data = await apiFetch("/api/auth/login", {
@@ -261,6 +271,9 @@ const LoginView = {
                     window.location.hash = "#/dashboard";
                 } catch (err) {
                     showToast(err.message, "error");
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = `<i class="fa-solid fa-right-to-bracket"></i> Log In`;
                 }
             });
         }
@@ -298,7 +311,9 @@ const RegisterView = {
                             </div>
                         </div>
                         
-                        <button type="submit" class="btn"><i class="fa-solid fa-user-plus"></i> Register</button>
+                        <button type="submit" class="btn" id="btn-register-submit">
+                            <i class="fa-solid fa-user-plus"></i> Register
+                        </button>
                     </form>
                     
                     <div class="auth-footer">
@@ -313,8 +328,13 @@ const RegisterView = {
         if (form) {
             form.addEventListener("submit", async (e) => {
                 e.preventDefault();
+                const submitBtn = document.getElementById("btn-register-submit");
                 const email = document.getElementById("register-email").value;
                 const password = document.getElementById("register-password").value;
+                
+                // Loading State
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = `<div class="loader" style="width:16px; height:16px; border-width:2px; margin:0;"></div> Creating...`;
                 
                 try {
                     await apiFetch("/api/auth/register", {
@@ -326,6 +346,9 @@ const RegisterView = {
                     window.location.hash = "#/login";
                 } catch (err) {
                     showToast(err.message, "error");
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = `<i class="fa-solid fa-user-plus"></i> Register`;
                 }
             });
         }
@@ -465,7 +488,7 @@ const PredictionFormView = {
                         
                         <div class="btn-group">
                             <button type="button" class="btn btn-secondary" id="btn-reset-form"><i class="fa-solid fa-rotate-left"></i> Reset</button>
-                            <button type="submit" class="btn"><i class="fa-solid fa-shield-heart"></i> Get Score</button>
+                            <button type="submit" class="btn" id="btn-score-submit"><i class="fa-solid fa-shield-heart"></i> Get Score</button>
                         </div>
                     </form>
                 </div>
@@ -510,6 +533,7 @@ const PredictionFormView = {
         if (form) {
             form.addEventListener("submit", async (e) => {
                 e.preventDefault();
+                const submitBtn = document.getElementById("btn-score-submit");
                 
                 // Assemble prediction payload
                 const payload = {
@@ -521,6 +545,10 @@ const PredictionFormView = {
                     payload[`V${i}`] = parseFloat(document.getElementById(`v-${i}`).value);
                 }
                 
+                // Loading state
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = `<div class="loader" style="width:16px; height:16px; border-width:2px; margin:0;"></div> Processing...`;
+                
                 try {
                     const res = await apiFetch("/api/transactions/score", {
                         method: "POST",
@@ -528,8 +556,12 @@ const PredictionFormView = {
                     });
                     
                     renderPredictionResult(res);
+                    showToast("Transaction scored successfully!");
                 } catch (err) {
                     showToast(err.message, "error");
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = `<i class="fa-solid fa-shield-heart"></i> Get Score`;
                 }
             });
         }
@@ -682,6 +714,7 @@ async function processCSVUpload(file) {
         return;
     }
     
+    // Loading State
     target.innerHTML = `
         <div style="text-align: center; padding: 24px;">
             <div class="loader" style="margin: 0 auto 12px auto;"></div>
@@ -736,7 +769,62 @@ async function processCSVUpload(file) {
     }
 }
 
-// 6. ANALYTICS & FRAUD CHARTS
+// 6. HISTORY VIEW
+const HistoryView = {
+    async render() {
+        let history = [];
+        try {
+            history = await apiFetch("/api/transactions/history");
+        } catch (err) {
+            console.error("Error loading history:", err);
+        }
+
+        const rowsHtml = history.map(tx => {
+            let badgeClass = "badge-low";
+            if (tx.risk_level === "HIGH") badgeClass = "badge-high";
+            else if (tx.risk_level === "MEDIUM") badgeClass = "badge-medium";
+            
+            return `
+                <tr>
+                    <td>TX-${tx.id}</td>
+                    <td>$${tx.amount.toFixed(2)}</td>
+                    <td>${(tx.fraud_probability * 100).toFixed(2)}%</td>
+                    <td><span class="badge ${badgeClass}">${tx.risk_level}</span></td>
+                    <td>${new Date(tx.created_at).toLocaleString()}</td>
+                </tr>
+            `;
+        }).join("");
+
+        return `
+            <div class="card">
+                <div class="card-title">
+                    <i class="fa-solid fa-clock-rotate-left"></i>
+                    <span>Evaluation Transaction History (Last 150)</span>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Transaction ID</th>
+                                <th>Amount</th>
+                                <th>Fraud Probability</th>
+                                <th>Risk Level</th>
+                                <th>Scored At</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rowsHtml || '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No evaluations recorded in history yet.</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    },
+    init() {}
+};
+
+// 7. ANALYTICS & FRAUD CHARTS
 const AnalyticsView = {
     async render() {
         return `
@@ -829,7 +917,7 @@ const AnalyticsView = {
     }
 };
 
-// 7. PROFILE VIEW
+// 8. PROFILE VIEW
 const ProfileView = {
     render() {
         const user = state.user || { email: "user@fraudsense.com", is_admin: false };
@@ -873,7 +961,7 @@ const ProfileView = {
     }
 };
 
-// 8. ADMIN DASHBOARD VIEW (MANAGE USERS)
+// 9. ADMIN DASHBOARD VIEW (MANAGE USERS & HEALTH)
 const AdminView = {
     async render() {
         if (!state.isAdmin()) {
@@ -883,6 +971,14 @@ const AdminView = {
                     <span>Unauthorized. Administrative privileges required.</span>
                 </div>
             `;
+        }
+
+        // Fetch System Health Status
+        let health = { api_status: "DOWN", ml_model: "Unknown", version: "0.0.0" };
+        try {
+            health = await apiFetch("/api/admin/health");
+        } catch (err) {
+            console.error("Error loading health status:", err);
         }
 
         let users = [];
@@ -913,6 +1009,34 @@ const AdminView = {
         `).join("");
 
         return `
+            <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 24px;">
+                <div class="stat-card success" style="padding: 16px;">
+                    <div class="stat-info">
+                        <h4 style="font-size:11px;">API Status</h4>
+                        <div class="stat-value" style="font-size:18px;">${health.api_status}</div>
+                    </div>
+                    <div class="stat-icon"><i class="fa-solid fa-server"></i></div>
+                </div>
+                
+                <div class="stat-card primary" style="padding: 16px;">
+                    <div class="stat-info">
+                        <h4 style="font-size:11px;">ML Model</h4>
+                        <div class="stat-value" style="font-size:18px; font-family:'Outfit'; text-overflow:ellipsis; overflow:hidden; white-space:nowrap; max-width:180px;">
+                            ${health.ml_model}
+                        </div>
+                    </div>
+                    <div class="stat-icon"><i class="fa-solid fa-brain"></i></div>
+                </div>
+                
+                <div class="stat-card warning" style="padding: 16px;">
+                    <div class="stat-info">
+                        <h4 style="font-size:11px;">Version</h4>
+                        <div class="stat-value" style="font-size:18px;">v${health.version}</div>
+                    </div>
+                    <div class="stat-icon"><i class="fa-solid fa-code-branch"></i></div>
+                </div>
+            </div>
+            
             <div class="card">
                 <div class="card-title">
                     <i class="fa-solid fa-users-gear"></i>
@@ -969,6 +1093,7 @@ const routes = {
     "#/dashboard": DashboardView,
     "#/transactions": PredictionFormView,
     "#/upload": CSVUploadView,
+    "#/history": HistoryView,
     "#/analytics": AnalyticsView,
     "#/profile": ProfileView,
     "#/admin": AdminView
@@ -994,6 +1119,7 @@ async function handleRouter() {
         let title = "Dashboard";
         if (hash.startsWith("#/transactions")) title = "New Evaluation";
         else if (hash.startsWith("#/upload")) title = "Batch CSV Upload";
+        else if (hash.startsWith("#/history")) title = "Evaluation History";
         else if (hash.startsWith("#/analytics")) title = "Fraud Analytics";
         else if (hash.startsWith("#/profile")) title = "Analyst Profile";
         else if (hash.startsWith("#/admin")) title = "Admin Panel";

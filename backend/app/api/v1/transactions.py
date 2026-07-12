@@ -8,6 +8,9 @@ from app.schemas.transaction import TransactionInput, FraudScoreResponse
 from app.services.fraud_scorer import fraud_scorer, FEATURE_COLUMNS
 from app.services.transaction_service import save_transaction
 from app.tasks.batch_score import batch_score_transactions
+from app.models.user import User
+from app.models.transaction import Transaction
+from app.core.security_dep import get_current_user
 
 router = APIRouter(
     prefix="/transactions",
@@ -39,7 +42,7 @@ def score_transaction(payload: TransactionInput, db: Session = Depends(get_db)):
     "/upload",
     status_code=200
 )
-def upload_transactions(file: UploadFile = File(...), db: Session = Depends(get_db)):
+def upload_transactions(file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     # 1. Validate file extension
     if not file.filename.endswith(".csv"):
         raise HTTPException(
@@ -68,7 +71,7 @@ def upload_transactions(file: UploadFile = File(...), db: Session = Depends(get_
                 detail="The uploaded CSV file contains no transaction records."
             )
 
-        # Limit batch size to prevent server timeout or database bottlenecks (e.g. max 5000 records)
+        # Limit batch size to prevent server timeout
         if len(records) > 5000:
             records = records[:5000]
             truncated = True
@@ -98,3 +101,16 @@ def upload_transactions(file: UploadFile = File(...), db: Session = Depends(get_
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error processing CSV: {str(e)}"
         )
+
+@router.get(
+    "/history",
+    status_code=200
+)
+def get_transaction_history(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Return last 150 transaction evaluations, ordered by id desc
+    return (
+        db.query(Transaction)
+        .order_by(Transaction.id.desc())
+        .limit(150)
+        .all()
+    )
