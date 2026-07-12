@@ -23,8 +23,17 @@ const state = {
         return this.token !== null;
     },
     
+    getUserRole() {
+        return this.user ? (this.user.role || "USER") : "USER";
+    },
+    
     isAdmin() {
-        return this.user && this.user.is_admin === true;
+        return this.getUserRole() === "ADMIN";
+    },
+    
+    isAnalyst() {
+        const role = this.getUserRole();
+        return role === "ANALYST" || role === "ADMIN";
     }
 };
 
@@ -58,6 +67,28 @@ function showToast(message, type = "success") {
             toast.remove();
         });
     }, 4000);
+}
+
+/* ----------------------------------
+   Password Strength Validation
+   ---------------------------------- */
+function validatePasswordStrength(password) {
+    if (password.length < 8) {
+        return "Password must be at least 8 characters long.";
+    }
+    if (!/[A-Z]/.test(password)) {
+        return "Password must contain at least one uppercase letter.";
+    }
+    if (!/[a-z]/.test(password)) {
+        return "Password must contain at least one lowercase letter.";
+    }
+    if (!/[0-9]/.test(password)) {
+        return "Password must contain at least one number.";
+    }
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+        return "Password must contain at least one special character.";
+    }
+    return null; // Valid
 }
 
 /* ----------------------------------
@@ -127,7 +158,9 @@ const sampleData = {
    Core Layout Frame & Shell
    ---------------------------------- */
 function renderShell(contentHtml) {
+    const role = state.getUserRole();
     const isAdmin = state.isAdmin();
+    const isAnalyst = state.isAnalyst();
     const activeRoute = window.location.hash || "#/dashboard";
     
     return `
@@ -143,12 +176,16 @@ function renderShell(contentHtml) {
                     <li class="menu-item ${activeRoute.startsWith("#/dashboard") ? "active" : ""}">
                         <a href="#/dashboard"><i class="fa-solid fa-chart-line"></i> Dashboard</a>
                     </li>
+                    
+                    ${isAnalyst ? `
                     <li class="menu-item ${activeRoute.startsWith("#/transactions") ? "active" : ""}">
                         <a href="#/transactions"><i class="fa-solid fa-cash-register"></i> New Predict</a>
                     </li>
                     <li class="menu-item ${activeRoute.startsWith("#/upload") ? "active" : ""}">
                         <a href="#/upload"><i class="fa-solid fa-file-csv"></i> CSV Upload</a>
                     </li>
+                    ` : ""}
+                    
                     <li class="menu-item ${activeRoute.startsWith("#/history") ? "active" : ""}">
                         <a href="#/history"><i class="fa-solid fa-clock-rotate-left"></i> History</a>
                     </li>
@@ -158,6 +195,7 @@ function renderShell(contentHtml) {
                     <li class="menu-item ${activeRoute.startsWith("#/profile") ? "active" : ""}">
                         <a href="#/profile"><i class="fa-solid fa-user-gear"></i> Profile</a>
                     </li>
+                    
                     ${isAdmin ? `
                     <li class="menu-item ${activeRoute.startsWith("#/admin") ? "active" : ""}">
                         <a href="#/admin"><i class="fa-solid fa-users-gear"></i> Admin Panel</a>
@@ -168,7 +206,7 @@ function renderShell(contentHtml) {
                 <div class="sidebar-user">
                     <div class="user-info">
                         <p class="user-email">${state.user ? state.user.email : "user@fraudsense.com"}</p>
-                        <p class="user-role">${isAdmin ? "Administrator" : "Analyst"}</p>
+                        <p class="user-role">${role === "ADMIN" ? "Administrator" : (role === "ANALYST" ? "Analyst" : "Observer")}</p>
                     </div>
                     <button class="btn-logout" id="btn-sidebar-logout" title="Log Out">
                         <i class="fa-solid fa-right-from-bracket"></i>
@@ -240,8 +278,9 @@ const LoginView = {
                         </button>
                     </form>
                     
-                    <div class="auth-footer">
+                    <div class="auth-footer" style="display:flex; flex-direction:column; gap:8px; margin-top:20px;">
                         <p>Don't have an account? <a href="#/register">Create one</a></p>
+                        <p><a href="#/forgot-password" style="font-size:12px; color:var(--text-muted);">Forgot Password?</a></p>
                     </div>
                 </div>
             </div>
@@ -301,6 +340,9 @@ const RegisterView = {
                                 <i class="fa-solid fa-envelope"></i>
                                 <input type="email" class="form-control" id="register-email" required placeholder="analyst@fraudsense.com">
                             </div>
+                            <span style="font-size:10px; color:var(--text-muted); display:block; margin-top:4px;">
+                                * Tip: Include 'analyst' in email to get scoring permissions.
+                            </span>
                         </div>
                         
                         <div class="form-group">
@@ -332,6 +374,13 @@ const RegisterView = {
                 const email = document.getElementById("register-email").value;
                 const password = document.getElementById("register-password").value;
                 
+                // Password strength validation
+                const valErr = validatePasswordStrength(password);
+                if (valErr) {
+                    showToast(valErr, "error");
+                    return;
+                }
+                
                 // Loading State
                 submitBtn.disabled = true;
                 submitBtn.innerHTML = `<div class="loader" style="width:16px; height:16px; border-width:2px; margin:0;"></div> Creating...`;
@@ -355,7 +404,197 @@ const RegisterView = {
     }
 };
 
-// 3. USER DASHBOARD VIEW
+// 3. FORGOT PASSWORD VIEW
+const ForgotPasswordView = {
+    render() {
+        return `
+            <div class="auth-page">
+                <div class="auth-card">
+                    <div class="auth-header">
+                        <div class="auth-logo">
+                            <i class="fa-solid fa-shield-halved"></i>
+                            <span>FraudSense</span>
+                        </div>
+                        <p class="auth-subtitle">Recover Analyst Account</p>
+                    </div>
+                    
+                    <form id="form-forgot">
+                        <div class="form-group">
+                            <label class="form-label">Account Email Address</label>
+                            <div class="input-container">
+                                <i class="fa-solid fa-envelope"></i>
+                                <input type="email" class="form-control" id="forgot-email" required placeholder="admin@fraudsense.com">
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="btn" id="btn-forgot-submit">
+                            <i class="fa-solid fa-paper-plane"></i> Send Reset Link
+                        </button>
+                    </form>
+                    
+                    <div id="forgot-recovery-box"></div>
+                    
+                    <div class="auth-footer">
+                        <p><a href="#/login">Back to Login</a></p>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+    init() {
+        const form = document.getElementById("form-forgot");
+        if (form) {
+            form.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const submitBtn = document.getElementById("btn-forgot-submit");
+                const email = document.getElementById("forgot-email").value;
+                
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = `<div class="loader" style="width:16px; height:16px; border-width:2px; margin:0;"></div> Sending...`;
+                
+                try {
+                    const res = await apiFetch("/api/auth/forgot-password", {
+                        method: "POST",
+                        body: JSON.stringify({ email })
+                    });
+                    
+                    showToast("Password reset token generated!");
+                    const resetUrl = `${window.location.origin}/index.html#/reset-password?token=${res.reset_token}`;
+                    
+                    document.getElementById("forgot-recovery-box").innerHTML = `
+                        <div class="upload-results" style="margin-top:20px; animation:slideIn 0.3s forwards;">
+                            <h4 style="font-size:13px; color:var(--color-success); margin-bottom:8px;">
+                                <i class="fa-solid fa-envelope-open-text"></i> Reset Link Simulated
+                            </h4>
+                            <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px; line-height:1.4;">
+                                In production, an email is sent. Click the link below to reset:
+                            </p>
+                            <a href="${resetUrl}" class="btn btn-secondary" style="font-size:12px; padding:8px 12px; display:inline-flex; width:auto; font-weight:600;">
+                                Go to Reset Password
+                            </a>
+                        </div>
+                    `;
+                } catch (err) {
+                    showToast(err.message, "error");
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Send Reset Link`;
+                }
+            });
+        }
+    }
+};
+
+// 4. RESET PASSWORD VIEW
+const ResetPasswordView = {
+    render() {
+        return `
+            <div class="auth-page">
+                <div class="auth-card">
+                    <div class="auth-header">
+                        <div class="auth-logo">
+                            <i class="fa-solid fa-shield-halved"></i>
+                            <span>FraudSense</span>
+                        </div>
+                        <p class="auth-subtitle">Set New Password</p>
+                    </div>
+                    
+                    <form id="form-reset">
+                        <input type="hidden" id="reset-token">
+                        
+                        <div class="form-group">
+                            <label class="form-label">New Password</label>
+                            <div class="input-container">
+                                <i class="fa-solid fa-lock"></i>
+                                <input type="password" class="form-control" id="reset-new-password" required placeholder="••••••••">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Confirm New Password</label>
+                            <div class="input-container">
+                                <i class="fa-solid fa-check-double"></i>
+                                <input type="password" class="form-control" id="reset-confirm-password" required placeholder="••••••••">
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="btn" id="btn-reset-submit">
+                            <i class="fa-solid fa-key"></i> Update Password
+                        </button>
+                    </form>
+                    
+                    <div class="auth-footer">
+                        <p><a href="#/login">Back to Login</a></p>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+    init() {
+        const form = document.getElementById("form-reset");
+        
+        // Parse token from hash query parameters
+        const hash = window.location.hash;
+        const parts = hash.split("?");
+        const query = parts[1] || "";
+        const params = new URLSearchParams(query);
+        const token = params.get("token") || "";
+        
+        const tokenInput = document.getElementById("reset-token");
+        if (tokenInput) tokenInput.value = token;
+        
+        if (!token) {
+            showToast("No reset token found. Please request another link.", "error");
+        }
+        
+        if (form) {
+            form.addEventListener("submit", async (e) => {
+                e.preventDefault();
+                const submitBtn = document.getElementById("btn-reset-submit");
+                const parsedToken = document.getElementById("reset-token").value;
+                const newPass = document.getElementById("reset-new-password").value;
+                const confirmPass = document.getElementById("reset-confirm-password").value;
+                
+                if (!parsedToken) {
+                    showToast("Missing verification token", "error");
+                    return;
+                }
+                
+                if (newPass !== confirmPass) {
+                    showToast("Passwords do not match", "error");
+                    return;
+                }
+                
+                // Strength check
+                const valErr = validatePasswordStrength(newPass);
+                if (valErr) {
+                    showToast(valErr, "error");
+                    return;
+                }
+                
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = `<div class="loader" style="width:16px; height:16px; border-width:2px; margin:0;"></div> Updating...`;
+                
+                try {
+                    await apiFetch("/api/auth/reset-password", {
+                        method: "POST",
+                        body: JSON.stringify({ token: parsedToken, new_password: newPass })
+                    });
+                    
+                    showToast("Password updated successfully!");
+                    window.location.hash = "#/login";
+                } catch (err) {
+                    showToast(err.message, "error");
+                } finally {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = `<i class="fa-solid fa-key"></i> Update Password`;
+                }
+            });
+        }
+    }
+};
+
+// 5. USER DASHBOARD VIEW
 const DashboardView = {
     async render() {
         let stats = { total_transactions: 0, high_risk_transactions: 0, average_fraud_probability: 0.0 };
@@ -438,7 +677,7 @@ const DashboardView = {
     init() {}
 };
 
-// 4. TRANSACTION PREDICTION FORM
+// 6. TRANSACTION PREDICTION FORM
 const PredictionFormView = {
     render() {
         // Generate inputs V1-V28
@@ -638,7 +877,7 @@ function renderPredictionResult(res) {
     target.scrollIntoView({ behavior: "smooth" });
 }
 
-// 5. CSV BATCH UPLOAD VIEW
+// 7. CSV BATCH UPLOAD VIEW
 const CSVUploadView = {
     render() {
         return `
@@ -769,7 +1008,7 @@ async function processCSVUpload(file) {
     }
 }
 
-// 6. HISTORY VIEW
+// 8. HISTORY VIEW
 const HistoryView = {
     async render() {
         let history = [];
@@ -824,7 +1063,7 @@ const HistoryView = {
     init() {}
 };
 
-// 7. ANALYTICS & FRAUD CHARTS
+// 9. ANALYTICS & FRAUD CHARTS
 const AnalyticsView = {
     async render() {
         return `
@@ -917,10 +1156,10 @@ const AnalyticsView = {
     }
 };
 
-// 8. PROFILE VIEW
+// 10. PROFILE VIEW
 const ProfileView = {
     render() {
-        const user = state.user || { email: "user@fraudsense.com", is_admin: false };
+        const user = state.user || { email: "user@fraudsense.com", role: "USER" };
         return `
             <div class="card" style="max-width: 500px; margin: 0 auto;">
                 <div class="card-title">
@@ -935,7 +1174,7 @@ const ProfileView = {
                     </div>
                     <div>
                         <span style="color: var(--text-muted); display: block; font-size:12px; font-weight:500; text-transform:uppercase;">Role Access</span>
-                        <strong>${user.is_admin ? 'ADMINISTRATOR' : 'ANALYST'}</strong>
+                        <strong>${user.role}</strong>
                     </div>
                     <div>
                         <span style="color: var(--text-muted); display: block; font-size:12px; font-weight:500; text-transform:uppercase;">Status</span>
@@ -961,7 +1200,7 @@ const ProfileView = {
     }
 };
 
-// 9. ADMIN DASHBOARD VIEW (MANAGE USERS & HEALTH)
+// 11. ADMIN DASHBOARD VIEW (MANAGE USERS & HEALTH)
 const AdminView = {
     async render() {
         if (!state.isAdmin()) {
@@ -1090,6 +1329,8 @@ const AdminView = {
 const routes = {
     "#/login": LoginView,
     "#/register": RegisterView,
+    "#/forgot-password": ForgotPasswordView,
+    "#/reset-password": ResetPasswordView,
     "#/dashboard": DashboardView,
     "#/transactions": PredictionFormView,
     "#/upload": CSVUploadView,
@@ -1100,18 +1341,40 @@ const routes = {
 };
 
 async function handleRouter() {
-    const hash = window.location.hash || "#/dashboard";
+    const rawHash = window.location.hash || "#/dashboard";
+    
+    // Parse query parameters (e.g. #/reset-password?token=XYZ)
+    const parts = rawHash.split("?");
+    const hash = parts[0];
+    const query = parts[1] || "";
+    
+    const isAuthPage = hash === "#/login" || hash === "#/register" || hash === "#/forgot-password" || hash === "#/reset-password";
     
     // Auth Guard redirects
-    if (!state.isAuthenticated() && hash !== "#/register") {
+    if (!state.isAuthenticated() && !isAuthPage) {
         window.location.hash = "#/login";
         renderView(LoginView, "Login");
         return;
     }
     
-    if (state.isAuthenticated() && (hash === "#/login" || hash === "#/register")) {
+    if (state.isAuthenticated() && (hash === "#/login" || hash === "#/register" || hash === "#/forgot-password" || hash === "#/reset-password")) {
         window.location.hash = "#/dashboard";
         return;
+    }
+    
+    // Role-based Access Guards
+    if (state.isAuthenticated()) {
+        const role = state.getUserRole();
+        if (hash === "#/admin" && role !== "ADMIN") {
+            showToast("Unauthorized. Administrative permissions required.", "error");
+            window.location.hash = "#/dashboard";
+            return;
+        }
+        if ((hash === "#/transactions" || hash === "#/upload") && role === "USER") {
+            showToast("Access Denied. Analyst permissions required.", "error");
+            window.location.hash = "#/dashboard";
+            return;
+        }
     }
     
     const view = routes[hash];
@@ -1123,6 +1386,8 @@ async function handleRouter() {
         else if (hash.startsWith("#/analytics")) title = "Fraud Analytics";
         else if (hash.startsWith("#/profile")) title = "Analyst Profile";
         else if (hash.startsWith("#/admin")) title = "Admin Panel";
+        else if (hash.startsWith("#/forgot-password")) title = "Forgot Password";
+        else if (hash.startsWith("#/reset-password")) title = "Reset Password";
         
         renderView(view, title);
     } else {
@@ -1136,7 +1401,7 @@ async function renderView(view, title) {
     const shell = document.getElementById("app-shell");
     if (!shell) return;
     
-    const isAuthPage = view === LoginView || view === RegisterView;
+    const isAuthPage = view === LoginView || view === RegisterView || view === ForgotPasswordView || view === ResetPasswordView;
     
     if (isAuthPage) {
         shell.innerHTML = view.render();

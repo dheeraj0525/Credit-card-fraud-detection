@@ -17,7 +17,14 @@ class AuthService:
         if not user.is_active:
             return None
 
-        role = "ADMIN" if user.is_admin else "USER"
+        # Map role dynamically: ADMIN, ANALYST, or USER
+        if user.is_admin:
+            role = "ADMIN"
+        elif "analyst" in user.email.lower():
+            role = "ANALYST"
+        else:
+            role = "USER"
+
         token = create_access_token(
             data={
                 "sub": user.email,
@@ -31,7 +38,8 @@ class AuthService:
             "user": {
                 "id": user.id,
                 "email": user.email,
-                "is_admin": user.is_admin
+                "is_admin": user.is_admin,
+                "role": role
             }
         }
 

@@ -1,17 +1,32 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
+import re
 
 from app.core.database import get_db
-from app.schemas.auth import LoginRequest, Token
+from app.schemas.auth import LoginRequest, Token, ForgotPasswordRequest, ResetPasswordRequest
 from app.schemas.user import UserCreate
 from app.models.user import User
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_token, create_access_token
 from app.services.auth_service import auth_service
 
 router = APIRouter(
     prefix="/auth",
     tags=["Authentication"]
 )
+
+def validate_password_strength(password: str) -> bool:
+    # Enforces: At least 8 characters, 1 uppercase, 1 lowercase, 1 number, 1 special character
+    if len(password) < 8:
+        return False
+    if not re.search(r"[A-Z]", password):
+        return False
+    if not re.search(r"[a-z]", password):
+        return False
+    if not re.search(r"[0-9]", password):
+        return False
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+        return False
+    return True
 
 @router.post(
     "/login",
@@ -45,6 +60,13 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
             detail="A user with this email address already exists."
         )
 
+    # Validate password strength
+    if not validate_password_strength(user_in.password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password is too weak. It must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character."
+        )
+
     # Create new active non-admin user
     new_user = User(
         email=user_in.email,
@@ -60,4 +82,64 @@ def register(user_in: UserCreate, db: Session = Depends(get_db)):
         "success": True,
         "message": "Registration successful",
         "email": new_user.email
+    }
+
+@router.post(
+    "/forgot-password",
+    status_code=200
+)
+def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == payload.email).first()
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="No account associated with this email address was found."
+        )
+
+    # Create a signed password-reset token
+    reset_token = create_access_token(
+        data={"sub": user.email, "type": "reset"}
+    )
+
+    return {
+        "success": True,
+        "message": "Password reset token generated successfully.",
+        "reset_token": reset_token
+    }
+
+@router.post(
+    "/reset-password",
+    status_code=200
+)
+def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db)):
+    # Decode and verify token
+    token_data = verify_token(payload.token)
+    if not token_data or token_data.get("type") != "reset":
+        raise HTTPException(
+            status_code=400,
+            detail="The password reset link is invalid or has expired."
+        )
+
+    # Validate password strength
+    if not validate_password_strength(payload.new_password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password is too weak. It must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character."
+        )
+
+    email = token_data.get("sub")
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User account associated with this token was not found."
+        )
+
+    # Reset password
+    user.hashed_password = hash_password(payload.new_password)
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "Your password has been successfully reset."
     }
