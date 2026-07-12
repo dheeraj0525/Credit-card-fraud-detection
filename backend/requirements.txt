@@ -9,3 +9,8 @@ scikit-learn
 joblib
 pandas
 numpy
+passlib[bcrypt]
+python-jose[cryptography]
+pydantic-settings
+email-validator
+xgboost

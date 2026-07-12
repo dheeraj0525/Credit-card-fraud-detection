@@ -3,11 +3,17 @@ import pandas as pd
 from joblib import load
 import os
 
-# Paths
-MODEL_PATH = "../models/xgboost_v1.pkl"
-SCALER_PATH = "../data/processed/scaler.pkl"
+# Dynamic Paths relative to script location
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODEL_PATH = os.path.join(BASE_DIR, "models", "xgboost_v1.pkl")
+SCALER_PATH = os.path.join(BASE_DIR, "data", "processed", "scaler.pkl")
 
 # Load artifacts once
+if not os.path.exists(MODEL_PATH):
+    raise FileNotFoundError(f"Model not found at: {MODEL_PATH}")
+if not os.path.exists(SCALER_PATH):
+    raise FileNotFoundError(f"Scaler not found at: {SCALER_PATH}")
+
 model = load(MODEL_PATH)
 scaler = load(SCALER_PATH)
 
@@ -44,11 +50,12 @@ def score_transaction(transaction: dict, threshold=0.5):
     # Ensure correct column order
     df = df[FEATURE_COLUMNS]
 
-    # Scale Time & Amount
+    # Scale Time & Amount (pass DataFrame directly to match fitted schema names)
     df[["Time", "Amount"]] = scaler.transform(df[["Time", "Amount"]])
 
-    # Predict probability
-    fraud_prob = model.predict_proba(df)[0][1]
+    # Predict probability (pass .values to match fitted numpy structure and avoid warning)
+    df_compat = df.astype("float32")
+    fraud_prob = model.predict_proba(df_compat.values)[0][1]
     prediction = int(fraud_prob >= threshold)
 
     return {

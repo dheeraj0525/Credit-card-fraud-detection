@@ -7,10 +7,17 @@ from app.core.config import settings
 DATABASE_URL = settings.DATABASE_URL
 
 # SQLAlchemy Engine
-engine = create_engine(
-    DATABASE_URL,
-    echo=False
-)
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        echo=False
+    )
+else:
+    engine = create_engine(
+        DATABASE_URL,
+        echo=False
+    )
 
 # Session Factory
 SessionLocal = sessionmaker(

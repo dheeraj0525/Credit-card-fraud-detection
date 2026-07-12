@@ -1,31 +1,27 @@
-from app.core.security import (
-    verify_password,
-    create_access_token,
-    hash_password
-)
-
-fake_user = {
-    "id": 1,
-    "username": "admin",
-    "password": hash_password("admin123"),
-    "role": "admin"
-}
-
+from sqlalchemy.orm import Session
+from app.models.user import User
+from app.core.security import verify_password, create_access_token
 
 class AuthService:
-
-    def login(self, username: str, password: str):
-
-        if username != fake_user["username"]:
+    def login(self, db: Session, email: str, password: str):
+        # Fetch user from the database
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
             return None
 
-        if not verify_password(password, fake_user["password"]):
+        # Verify password against hash
+        if not verify_password(password, user.hashed_password):
             return None
 
+        # Check if the account is active
+        if not user.is_active:
+            return None
+
+        role = "ADMIN" if user.is_admin else "USER"
         token = create_access_token(
-            {
-                "sub": username,
-                "role": fake_user["role"]
+            data={
+                "sub": user.email,
+                "role": role
             }
         )
 
@@ -33,11 +29,10 @@ class AuthService:
             "access_token": token,
             "token_type": "bearer",
             "user": {
-                "id": fake_user["id"],
-                "username": fake_user["username"],
-                "role": fake_user["role"]
+                "id": user.id,
+                "email": user.email,
+                "is_admin": user.is_admin
             }
         }
-
 
 auth_service = AuthService()

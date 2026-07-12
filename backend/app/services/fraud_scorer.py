@@ -48,13 +48,13 @@ class FraudScorer:
 
         # ---- Scale Time & Amount correctly ----
         df[["Time", "Amount"]] = self.scaler.transform(
-            df[["Time", "Amount"]].values
+            df[["Time", "Amount"]]
         )
 
         # ---- Ensure XGBoost compatibility ----
         df = df.astype("float32")
 
-        prob = float(self.model.predict_proba(df)[0][1])
+        prob = float(self.model.predict_proba(df.values)[0][1])
         is_fraud = int(prob >= threshold)
 
         return {

@@ -5,7 +5,7 @@ from app.models.transaction import Transaction
 def fraud_summary(db: Session):
     total = db.query(func.count(Transaction.id)).scalar()
     high_risk = db.query(func.count(Transaction.id)) \
-        .filter(Transaction.risk_level == "High") \
+        .filter(Transaction.risk_level == "HIGH") \
         .scalar()
 
     avg_fraud_score = db.query(

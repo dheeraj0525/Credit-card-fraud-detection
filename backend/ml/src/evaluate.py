@@ -11,15 +11,22 @@ from sklearn.metrics import (
     roc_curve
 )
 
-# Paths
-DATA_DIR = "../data/processed"
-MODEL_PATH = "../models/xgboost_v1.pkl"
+# Dynamic Paths relative to script location
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(BASE_DIR, "data", "processed")
+MODEL_PATH = os.path.join(BASE_DIR, "models", "xgboost_v1.pkl")
 
 
 def main():
     # Load data
-    X_test = np.load(os.path.join(DATA_DIR, "X_test.npy"))
-    y_test = np.load(os.path.join(DATA_DIR, "y_test.npy"))
+    X_test_path = os.path.join(DATA_DIR, "X_test.npy")
+    y_test_path = os.path.join(DATA_DIR, "y_test.npy")
+
+    if not all(os.path.exists(p) for p in [X_test_path, y_test_path, MODEL_PATH]):
+        raise FileNotFoundError(f"Processed test array or model files missing. Please preprocess and train first.")
+
+    X_test = np.load(X_test_path)
+    y_test = np.load(y_test_path)
 
     # Load model
     model = load(MODEL_PATH)
@@ -28,7 +35,7 @@ def main():
     y_prob = model.predict_proba(X_test)[:, 1]
 
     # ==================================================
-    # STEP 5.2 — THRESHOLD TESTING (INSERTED HERE)
+    # STEP 5.2 — THRESHOLD TESTING
     # ==================================================
     print("\n===== THRESHOLD COMPARISON =====")
 

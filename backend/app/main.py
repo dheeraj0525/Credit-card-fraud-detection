@@ -1,13 +1,65 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 import os
 import uvicorn
+import logging
+from contextlib import asynccontextmanager
+from sqlalchemy.orm import Session
 
 from app.services.fraud_scorer import fraud_scorer
+from app.services.transaction_service import save_transaction
+from app.core.database import get_db
 from app.api.router import api_router
 
-app.include_router(api_router)
+# ----------------------------------
+# Logging Setup
+# ----------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+logger = logging.getLogger("fraudsense")
+
+# ----------------------------------
+# Lifespan Context Manager (DB initialization & seeding)
+# ----------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize DB tables
+    logger.info("Initializing database tables...")
+    from app.core.database import engine, Base
+    import app.models  # ensure models are registered
+    Base.metadata.create_all(bind=engine)
+
+    # Seed Admin User
+    from app.core.database import SessionLocal
+    from app.models.user import User
+    from app.core.security import hash_password
+
+    db = SessionLocal()
+    try:
+        admin_email = "admin@fraudsense.com"
+        exists = db.query(User).filter(User.email == admin_email).first()
+        if not exists:
+            admin_user = User(
+                email=admin_email,
+                hashed_password=hash_password("admin123"),
+                is_admin=True,
+                is_active=True
+            )
+            db.add(admin_user)
+            db.commit()
+            logger.info("Default admin user seeded successfully.")
+        else:
+            logger.info("Admin user already exists.")
+    except Exception as e:
+        logger.error(f"Error during db seeding: {e}")
+    finally:
+        db.close()
+
+    yield
+
 # ----------------------------------
 # FastAPI App
 # ----------------------------------
@@ -17,8 +69,12 @@ app = FastAPI(
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
-    openapi_url="/openapi.json"
+    openapi_url="/openapi.json",
+    lifespan=lifespan
 )
+
+# Register Router (defined AFTER app initialization to prevent NameError)
+app.include_router(api_router)
 
 # ----------------------------------
 # Root
@@ -95,18 +151,29 @@ class TransactionInput(BaseModel):
 # Fraud Prediction
 # ----------------------------------
 @app.post("/predict")
-def predict_fraud(transaction: TransactionInput):
+def predict_fraud(transaction: TransactionInput, db: Session = Depends(get_db)):
     try:
-        result = fraud_scorer.score(transaction.dict())
+        result = fraud_scorer.score(transaction.model_dump())
+        
+        # Save prediction results to database
+        tx_data = {
+            "amount": transaction.Amount,
+            "fraud_probability": result["fraud_probability"],
+            "risk_level": result["risk_level"]
+        }
+        save_transaction(db, tx_data)
+
         return {
             "success": True,
             "result": result
         }
 
     except ValueError as e:
+        logger.warning(f"Validation error in predict: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
     except Exception as e:
+        logger.error(f"Internal server error in predict: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Internal server error: {str(e)}"

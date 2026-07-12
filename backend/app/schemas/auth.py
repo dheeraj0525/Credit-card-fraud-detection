@@ -1,16 +1,13 @@
-from pydantic import BaseModel
-
+from pydantic import BaseModel, EmailStr
 
 class LoginRequest(BaseModel):
-    username: str
+    username: str  # OAuth2/JWT standard uses username (maps to email here)
     password: str
-
 
 class UserResponse(BaseModel):
     id: int
-    username: str
-    role: str
-
+    email: EmailStr
+    is_admin: bool
 
 class Token(BaseModel):
     access_token: str

@@ -1,7 +1,13 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
-router = APIRouter()
+from app.core.database import get_db
+from app.services.analytics_service import fraud_summary
+from app.models.user import User
+from app.core.security_dep import get_current_user
+
+router = APIRouter(tags=["Analytics"])
 
 @router.get("/stats")
-def stats():
-    return {"total": 100}
+def stats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return fraud_summary(db)

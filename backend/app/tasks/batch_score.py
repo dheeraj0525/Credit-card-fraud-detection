@@ -1,15 +1,16 @@
 from sqlalchemy.orm import Session
-from app.services.fraud_scorer import score_transaction
+from app.services.fraud_scorer import fraud_scorer
 from app.services.transaction_service import save_transaction
 
 def batch_score_transactions(db: Session, transactions: list):
     results = []
 
     for tx in transactions:
-        score = score_transaction(tx)
+        # Call the score method on the fraud_scorer singleton instance
+        score = fraud_scorer.score(tx)
 
         tx_data = {
-            "amount": tx["amount"],
+            "amount": tx.get("Amount", tx.get("amount", 0.0)),
             "fraud_probability": score["fraud_probability"],
             "risk_level": score["risk_level"]
         }

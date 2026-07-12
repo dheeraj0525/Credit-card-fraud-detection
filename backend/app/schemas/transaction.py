@@ -32,9 +32,13 @@ class TransactionInput(BaseModel):
     V28: float
     Amount: float
 
-
 class FraudPredictionResponse(BaseModel):
     success: bool
+    fraud_probability: float
+    is_fraud: int
+    risk_level: str
+
+class FraudScoreResponse(BaseModel):
     fraud_probability: float
     is_fraud: int
     risk_level: str

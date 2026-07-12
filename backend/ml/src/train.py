@@ -4,18 +4,27 @@ from joblib import dump
 from xgboost import XGBClassifier
 from sklearn.metrics import classification_report, roc_auc_score
 
-# Paths
-DATA_DIR = "../data/processed"
-MODEL_DIR = "../models"
+# Dynamic Paths relative to script location
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(BASE_DIR, "data", "processed")
+MODEL_DIR = os.path.join(BASE_DIR, "models")
 
 os.makedirs(MODEL_DIR, exist_ok=True)
 
 def main():
     # 1. Load processed data
-    X_train = np.load(os.path.join(DATA_DIR, "X_train.npy"))
-    y_train = np.load(os.path.join(DATA_DIR, "y_train.npy"))
-    X_test = np.load(os.path.join(DATA_DIR, "X_test.npy"))
-    y_test = np.load(os.path.join(DATA_DIR, "y_test.npy"))
+    X_train_path = os.path.join(DATA_DIR, "X_train.npy")
+    y_train_path = os.path.join(DATA_DIR, "y_train.npy")
+    X_test_path = os.path.join(DATA_DIR, "X_test.npy")
+    y_test_path = os.path.join(DATA_DIR, "y_test.npy")
+
+    if not all(os.path.exists(p) for p in [X_train_path, y_train_path, X_test_path, y_test_path]):
+        raise FileNotFoundError(f"Processed arrays missing in {DATA_DIR}. Please run preprocess.py first.")
+
+    X_train = np.load(X_train_path)
+    y_train = np.load(y_train_path)
+    X_test = np.load(X_test_path)
+    y_test = np.load(y_test_path)
 
     print("Data loaded successfully")
 
@@ -33,6 +42,7 @@ def main():
     )
 
     # 3. Train model
+    print("Training XGBClassifier...")
     model.fit(X_train, y_train)
 
     # 4. Evaluate on test set
