@@ -31,6 +31,16 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing database tables...")
     from app.core.database import engine, Base
     import app.models  # ensure models are registered
+    from sqlalchemy import inspect
+    
+    # Auto-recreate database tables if schema additions are missing
+    inspector = inspect(engine)
+    if "transactions" in inspector.get_table_names():
+        columns = [c["name"] for c in inspector.get_columns("transactions")]
+        if "status" not in columns:
+            logger.info("New columns missing in transactions table. Recreating database...")
+            Base.metadata.drop_all(bind=engine)
+            
     Base.metadata.create_all(bind=engine)
 
     # Seed Admin User

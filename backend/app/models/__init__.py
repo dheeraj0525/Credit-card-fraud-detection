@@ -1,7 +1,18 @@
 from app.core.database import Base
-from app.models.user import User
-from app.models.transaction import Transaction
-from app.models.audit_log import AuditLog
-from app.models.watchlist import WatchList
+from .user import User
+from .transaction import Transaction
+from .audit_log import AuditLog
+from .watchlist import WatchList
+from .bank_analysis import BankTransaction, BehaviouralProfile
+from .notification_log import NotificationLog
 
-__all__ = ["Base", "User", "Transaction", "AuditLog", "WatchList"]
+__all__ = [
+    "Base", 
+    "User", 
+    "Transaction", 
+    "AuditLog", 
+    "WatchList", 
+    "BankTransaction", 
+    "BehaviouralProfile", 
+    "NotificationLog"
+]

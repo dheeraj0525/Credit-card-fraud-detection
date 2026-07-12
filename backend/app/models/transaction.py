@@ -10,3 +10,8 @@ class Transaction(Base):
     fraud_probability = Column(Float)
     risk_level = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Audit & Review Fields
+    status = Column(String, default="PENDING_REVIEW")  # PENDING_REVIEW, FLAGGED_FRAUD, FALSE_POSITIVE, APPROVED
+    comments = Column(String, default="")
+    audited_by = Column(String, default="")
