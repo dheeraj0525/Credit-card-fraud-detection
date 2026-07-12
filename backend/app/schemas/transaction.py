@@ -1,5 +1,4 @@
 from pydantic import BaseModel
-from typing import Optional
 
 class TransactionInput(BaseModel):
     Time: float
@@ -34,7 +33,8 @@ class TransactionInput(BaseModel):
     Amount: float
 
 
-class FraudScoreResponse(BaseModel):
+class FraudPredictionResponse(BaseModel):
+    success: bool
     fraud_probability: float
     is_fraud: int
     risk_level: str

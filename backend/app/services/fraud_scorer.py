@@ -2,10 +2,13 @@ import pandas as pd
 from joblib import load
 import os
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+# backend/app/services/fraud_scorer.py
+BASE_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..")
+)
 
-MODEL_PATH = os.path.join(BASE_DIR, "ml/models/xgboost_v1.pkl")
-SCALER_PATH = os.path.join(BASE_DIR, "ml/data/processed/scaler.pkl")
+MODEL_PATH = os.path.join(BASE_DIR, "ml", "models", "xgboost_v1.pkl")
+SCALER_PATH = os.path.join(BASE_DIR, "ml", "data", "processed", "scaler.pkl")
 
 FEATURE_COLUMNS = [
     "Time", "V1", "V2", "V3", "V4", "V5", "V6", "V7",
@@ -15,8 +18,15 @@ FEATURE_COLUMNS = [
     "Amount"
 ]
 
+
 class FraudScorer:
     def __init__(self):
+        if not os.path.exists(MODEL_PATH):
+            raise FileNotFoundError(f"Model not found: {MODEL_PATH}")
+
+        if not os.path.exists(SCALER_PATH):
+            raise FileNotFoundError(f"Scaler not found: {SCALER_PATH}")
+
         self.model = load(MODEL_PATH)
         self.scaler = load(SCALER_PATH)
 
@@ -28,18 +38,27 @@ class FraudScorer:
         return "LOW"
 
     def score(self, transaction: dict, threshold: float = 0.7) -> dict:
+        # ---- Validation (necessary) ----
+        missing = set(FEATURE_COLUMNS) - set(transaction.keys())
+        if missing:
+            raise ValueError(f"Missing features: {missing}")
+
         df = pd.DataFrame([transaction])
         df = df[FEATURE_COLUMNS]
 
+        # ---- Scale Time & Amount correctly ----
         df[["Time", "Amount"]] = self.scaler.transform(
-            df[["Time", "Amount"]]
+            df[["Time", "Amount"]].values
         )
 
-        prob = self.model.predict_proba(df)[0][1]
+        # ---- Ensure XGBoost compatibility ----
+        df = df.astype("float32")
+
+        prob = float(self.model.predict_proba(df)[0][1])
         is_fraud = int(prob >= threshold)
 
         return {
-            "fraud_probability": round(float(prob), 4),
+            "fraud_probability": round(prob, 4),
             "is_fraud": is_fraud,
             "risk_level": self._risk_level(prob)
         }

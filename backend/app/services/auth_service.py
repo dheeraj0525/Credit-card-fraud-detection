@@ -4,9 +4,6 @@ from app.core.security import (
     hash_password
 )
 
-# Temporary user
-# Later this will come from PostgreSQL
-
 fake_user = {
     "id": 1,
     "username": "admin",
@@ -22,10 +19,7 @@ class AuthService:
         if username != fake_user["username"]:
             return None
 
-        if not verify_password(
-            password,
-            fake_user["password"]
-        ):
+        if not verify_password(password, fake_user["password"]):
             return None
 
         token = create_access_token(
