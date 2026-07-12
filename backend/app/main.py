@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import os
 import uvicorn
@@ -178,6 +179,14 @@ def predict_fraud(transaction: TransactionInput, db: Session = Depends(get_db)):
             status_code=500,
             detail=f"Internal server error: {str(e)}"
         )
+
+# ----------------------------------
+# Static Frontend Mounting
+# ----------------------------------
+FRONTEND_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "frontend")
+)
+app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
 
 # ----------------------------------
 # Local Run
