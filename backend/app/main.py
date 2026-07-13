@@ -91,6 +91,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Register Rate Limiting & Security Headers Middleware
+from app.middleware.rate_limiter import RateLimiterMiddleware
+app.add_middleware(RateLimiterMiddleware, limit=100, window=60)
+
 # Register Router (defined AFTER app initialization to prevent NameError)
 app.include_router(api_router)
 
