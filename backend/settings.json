@@ -1,0 +1,8 @@
+{
+    "fraud_threshold": 0.5,
+    "smtp_host": "smtp.fraudsense-alerts.com",
+    "smtp_port": 587,
+    "smtp_user": "alerts@fraudsense.com",
+    "session_timeout_minutes": 60,
+    "security_mode": "HIGH"
+}

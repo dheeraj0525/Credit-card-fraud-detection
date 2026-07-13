@@ -30,7 +30,19 @@ def score_transaction(payload: TransactionInput, db: Session = Depends(get_db)):
         "fraud_probability": result["fraud_probability"],
         "risk_level": result["risk_level"]
     }
-    save_transaction(db, tx_data)
+    tx = save_transaction(db, tx_data)
+    
+    # Auto-open FraudCase and In-App notification if High Risk
+    if tx.risk_level == "HIGH":
+        from app.models.case_management import FraudCase
+        from app.models.in_app_notification import InAppNotification
+        
+        case = FraudCase(transaction_id=tx.id, status="OPEN")
+        db.add(case)
+        
+        notif = InAppNotification(message=f"Critical Alert: High-risk Transaction TX-{tx.id} of ${tx.amount:.2f} requires investigation.")
+        db.add(notif)
+        db.commit()
 
     return FraudScoreResponse(
         fraud_probability=result["fraud_probability"],

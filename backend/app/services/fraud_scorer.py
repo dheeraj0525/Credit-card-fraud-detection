@@ -31,13 +31,22 @@ class FraudScorer:
         self.scaler = load(SCALER_PATH)
 
     def _risk_level(self, prob: float) -> str:
-        if prob >= 0.85:
+        from app.api.v1.config import load_system_config
+        config = load_system_config()
+        thresh = config.get("fraud_threshold", 0.50)
+        
+        if prob >= thresh:
             return "HIGH"
-        elif prob >= 0.6:
+        elif prob >= thresh * 0.7:
             return "MEDIUM"
         return "LOW"
 
-    def score(self, transaction: dict, threshold: float = 0.7) -> dict:
+    def score(self, transaction: dict, threshold: float = None) -> dict:
+        from app.api.v1.config import load_system_config
+        config = load_system_config()
+        if threshold is None:
+            threshold = config.get("fraud_threshold", 0.50)
+
         # ---- Validation (necessary) ----
         missing = set(FEATURE_COLUMNS) - set(transaction.keys())
         if missing:

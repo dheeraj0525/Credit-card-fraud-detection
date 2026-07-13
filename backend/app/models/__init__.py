@@ -5,6 +5,8 @@ from .audit_log import AuditLog
 from .watchlist import WatchList
 from .bank_analysis import BankTransaction, BehaviouralProfile
 from .notification_log import NotificationLog
+from .case_management import FraudCase
+from .in_app_notification import InAppNotification
 
 __all__ = [
     "Base", 
@@ -14,5 +16,7 @@ __all__ = [
     "WatchList", 
     "BankTransaction", 
     "BehaviouralProfile", 
-    "NotificationLog"
+    "NotificationLog",
+    "FraudCase",
+    "InAppNotification"
 ]

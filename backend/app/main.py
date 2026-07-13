@@ -69,7 +69,14 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
+    # Start background job scheduler
+    from app.tasks.scheduler import scheduler
+    scheduler.start()
+
     yield
+
+    # Stop background job scheduler
+    await scheduler.stop()
 
 # ----------------------------------
 # FastAPI App

@@ -10,6 +10,7 @@ const state = {
         this.user = user;
         localStorage.setItem("token", token);
         localStorage.setItem("user", JSON.stringify(user));
+        startNotificationPolling();
     },
     
     clearAuth() {
@@ -17,6 +18,9 @@ const state = {
         this.user = null;
         localStorage.removeItem("token");
         localStorage.removeItem("user");
+        stopNotificationPolling();
+        const banner = document.getElementById("in-app-alert-banner");
+        if (banner) banner.style.display = "none";
     },
     
     isAuthenticated() {
@@ -60,13 +64,73 @@ function showToast(message, type = "success") {
     
     container.appendChild(toast);
     
-    // Auto-remove toast after 4s
     setTimeout(() => {
         toast.style.animation = "slideOut 0.3s forwards";
         toast.addEventListener("animationend", () => {
             toast.remove();
         });
     }, 4000);
+}
+
+/* ----------------------------------
+   In-App Real-time Polling Banner
+   ---------------------------------- */
+let notificationPollInterval = null;
+
+function startNotificationPolling() {
+    if (notificationPollInterval) clearInterval(notificationPollInterval);
+    
+    notificationPollInterval = setInterval(async () => {
+        if (!state.isAuthenticated()) return;
+        try {
+            const notifs = await apiFetch("/api/monitoring/notifications");
+            const unread = notifs.filter(n => !n.read);
+            if (unread.length > 0) {
+                renderInAppAlertBanner(unread[0]);
+            }
+        } catch (err) {
+            console.error("Error polling notifications:", err);
+        }
+    }, 12000);
+}
+
+function stopNotificationPolling() {
+    if (notificationPollInterval) {
+        clearInterval(notificationPollInterval);
+        notificationPollInterval = null;
+    }
+}
+
+function renderInAppAlertBanner(notif) {
+    let banner = document.getElementById("in-app-alert-banner");
+    if (!banner) {
+        banner = document.createElement("div");
+        banner.id = "in-app-alert-banner";
+        banner.className = "in-app-banner";
+        document.body.prepend(banner);
+    }
+    
+    banner.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; width:100%; font-size:13px;">
+            <div>
+                <i class="fa-solid fa-triangle-exclamation" style="margin-right:8px; animation: pulse 1s infinite;"></i>
+                <span>${notif.message}</span>
+            </div>
+            <button class="btn btn-secondary" style="width:auto; padding:4px 8px; font-size:11px; margin-left:16px; background:#131a26; color:#f1f5f9;" id="btn-dismiss-alert">
+                Dismiss
+            </button>
+        </div>
+    `;
+    banner.style.display = "block";
+    
+    document.getElementById("btn-dismiss-alert").onclick = async () => {
+        try {
+            await apiFetch(`/api/monitoring/notifications/${notif.id}/read`, { method: "PUT" });
+            banner.style.display = "none";
+        } catch (err) {
+            banner.style.display = "none";
+        }
+    };
 }
 
 /* ----------------------------------
@@ -123,7 +187,6 @@ async function apiFetch(path, options = {}) {
         throw new Error(message);
     }
     
-    // Return json if content exists
     if (response.status === 204) return null;
     return await response.json();
 }
@@ -637,7 +700,6 @@ const DashboardView = {
 
         return `
             <div class="card-grid">
-                <!-- Stat Cards -->
                 <div class="stat-card primary">
                     <div class="stat-info">
                         <h4>Total Evaluated</h4>
@@ -764,7 +826,6 @@ const PredictionFormView = {
                 <div id="prediction-result-target"></div>
             </div>
             
-            <!-- Email Modal Anchor -->
             <div id="email-modal-container"></div>
         `;
     },
@@ -821,47 +882,37 @@ const PredictionFormView = {
                 submitBtn.innerHTML = `<div class="loader" style="width:16px; height:16px; border-width:2px; margin:0;"></div> Processing...`;
                 
                 try {
-                    // 1. Fetch ML Score from FastAPI
                     const mlRes = await apiFetch("/api/transactions/score", {
                         method: "POST",
                         body: JSON.stringify(payload)
                     });
                     
-                    // 2. Fetch Behavioural Profile if it exists
                     let profile = null;
                     try {
                         profile = await apiFetch(`/api/bank/profiles/${custId}`);
-                    } catch (pErr) {
-                        // Profile does not exist, which is fine
-                    }
+                    } catch (pErr) {}
                     
-                    // 3. Compute Behavioural Anomaly Score
                     let anomalies = [];
                     let behaviouralScore = 0.0;
                     
                     if (profile) {
-                        // Check spending spike (Amount > 1.5 * max historical spending)
                         if (amount > profile.max_spending * 1.5) {
                             anomalies.push(`Transaction amount $${amount} is a spending spike (Historical Max: $${profile.max_spending})`);
                         }
                         
-                        // Check new merchant (Not in common merchants list)
                         const commonM = JSON.parse(profile.common_merchants);
                         if (commonM.length > 0 && !commonM.some(m => merchant.toLowerCase().includes(m.toLowerCase()))) {
                             anomalies.push(`New merchant name: '${merchant}'`);
                         }
                         
-                        // Check new location
                         const commonL = JSON.parse(profile.common_locations);
                         if (commonL.length > 0 && !commonL.some(l => location.toLowerCase().includes(l.toLowerCase()))) {
                             anomalies.push(`New location coordinates: '${location}'`);
                         }
                         
-                        // Score calculation: 0.25 boost per anomaly flag
                         behaviouralScore = Math.min(1.0, anomalies.length * 0.25);
                     }
                     
-                    // 4. Calculate Combined Risk Score
                     const mlProb = mlRes.fraud_probability;
                     const combinedScore = profile ? (0.6 * mlProb + 0.4 * behaviouralScore) : mlProb;
                     
@@ -936,17 +987,14 @@ function renderCombinedPredictionResult(mlRes, profile, anomalies, behaviouralSc
             
             <div class="prediction-result-wrapper">
                 <div style="display:flex; justify-content:center; gap:40px; align-items:center; margin-bottom:24px; flex-wrap:wrap;">
-                    <!-- ML Score -->
                     <div style="text-align:center;">
                         <h4 style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px;">Model Score</h4>
                         <div style="font-size:24px; font-weight:700;">${mlPct}%</div>
                     </div>
-                    <!-- Behavioral Score -->
                     <div style="text-align:center; border-left:1px solid var(--border-color); padding-left:40px;">
                         <h4 style="font-size:11px; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px;">Behavioural Score</h4>
                         <div style="font-size:24px; font-weight:700; color: ${profile && behaviouralScore > 0 ? 'var(--color-warning)' : 'inherit'};">${profile ? `${behPct}%` : 'N/A'}</div>
                     </div>
-                    <!-- Combined Gauge -->
                     <div class="gauge-chart-container" style="width:130px; height:130px; margin:0; border-left:1px solid var(--border-color); padding-left:40px;">
                         <canvas id="combined-gauge-canvas"></canvas>
                         <div class="gauge-percentage" style="font-size:20px; margin-left:20px;">${combPct}%</div>
@@ -963,7 +1011,6 @@ function renderCombinedPredictionResult(mlRes, profile, anomalies, behaviouralSc
         </div>
     `;
     
-    // Draw Gauge Chart
     const ctx = document.getElementById("combined-gauge-canvas").getContext("2d");
     new Chart(ctx, {
         type: 'doughnut',
@@ -987,12 +1034,10 @@ function renderCombinedPredictionResult(mlRes, profile, anomalies, behaviouralSc
         }
     });
     
-    // Wire up Notify Bank Modal
     document.getElementById("btn-notify-bank-modal").addEventListener("click", () => {
         openNotifyBankModal(custId, mlRes, behaviouralScore, combinedScore, merchant, location);
     });
     
-    // Wire up Export PDF click
     document.getElementById("btn-export-pdf-report").addEventListener("click", () => {
         showToast("Generating PDF Fraud Investigation Report...");
         setTimeout(() => {
@@ -1061,7 +1106,6 @@ function openNotifyBankModal(custId, mlRes, behaviouralScore, combinedScore, mer
         </div>
     `;
     
-    // Cancel & Close handlers
     const closeBtn = document.getElementById("btn-close-email-modal");
     const cancelBtn = document.getElementById("btn-cancel-email");
     const overlay = document.getElementById("email-modal-overlay");
@@ -1122,7 +1166,6 @@ const BankAnalysisView = {
 
         return `
             <div style="display:grid; grid-template-columns: 1fr 2fr; gap:24px;">
-                <!-- Left panel: CSV Upload & Profile selection -->
                 <div>
                     <div class="card">
                         <div class="card-title">
@@ -1163,7 +1206,6 @@ const BankAnalysisView = {
                     </div>
                 </div>
                 
-                <!-- Right panel: Behavioral dashboard stats -->
                 <div id="customer-profile-dashboard">
                     <div style="height:100%; display:flex; flex-direction:column; justify-content:center; align-items:center; border: 1px dashed var(--border-color); border-radius:12px; padding:48px; color:var(--text-muted);">
                         <i class="fa-solid fa-chart-pie" style="font-size:48px; margin-bottom:16px;"></i>
@@ -1239,7 +1281,6 @@ const BankAnalysisView = {
                     return;
                 }
                 
-                // Fetch stats and render
                 try {
                     const profile = await apiFetch(`/api/bank/profiles/${custId}`);
                     renderCustomerProfileDashboard(profile);
@@ -1261,7 +1302,6 @@ function renderCustomerProfileDashboard(p) {
     
     target.innerHTML = `
         <div style="animation: slideIn 0.3s forwards;">
-            <!-- Spending Overview Grid -->
             <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom:24px;">
                 <div class="stat-card primary" style="padding:16px;">
                     <div class="stat-info">
@@ -1289,7 +1329,6 @@ function renderCustomerProfileDashboard(p) {
                 </div>
             </div>
             
-            <!-- Merchants / Location lists -->
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:24px;">
                 <div class="card" style="margin:0;">
                     <div class="card-title"><i class="fa-solid fa-store"></i> Frequent Merchants</div>
@@ -1321,7 +1360,6 @@ function renderCustomerProfileDashboard(p) {
         </div>
     `;
     
-    // Wire up delete button
     document.getElementById("btn-delete-dataset").onclick = async () => {
         if (confirm(`Are you sure you want to delete all imported bank records and profile statistics for customer ${p.customer_id}?`)) {
             try {
@@ -1561,28 +1599,30 @@ const AdminView = {
             `;
         }
 
-        // Subtabs Navigation
         const tabsHtml = `
             <div class="tab-nav">
                 <button class="tab-btn ${this.activeTab === "users" ? "active" : ""}" data-tab="users"><i class="fa-solid fa-users"></i> Users</button>
-                <button class="tab-btn ${this.activeTab === "audit" ? "active" : ""}" data-tab="audit"><i class="fa-solid fa-list-check"></i> Audit Logs</button>
-                <button class="tab-btn ${this.activeTab === "model" ? "active" : ""}" data-tab="model"><i class="fa-solid fa-brain"></i> Model Performance</button>
-                <button class="tab-btn ${this.activeTab === "rules" ? "active" : ""}" data-tab="rules"><i class="fa-solid fa-bars-staggered"></i> Fraud Rules</button>
-                <button class="tab-btn ${this.activeTab === "notifications" ? "active" : ""}" data-tab="notifications"><i class="fa-solid fa-envelope-circle-check"></i> Email Alerts Log</button>
+                <button class="tab-btn ${this.activeTab === "cases" ? "active" : ""}" data-tab="cases"><i class="fa-solid fa-folder-open"></i> Case Management</button>
+                <button class="tab-btn ${this.activeTab === "monitoring" ? "active" : ""}" data-tab="monitoring"><i class="fa-solid fa-gauge"></i> Monitoring</button>
+                <button class="tab-btn ${this.activeTab === "drift" ? "active" : ""}" data-tab="drift"><i class="fa-solid fa-chart-line"></i> Model Drift</button>
+                <button class="tab-btn ${this.activeTab === "settings" ? "active" : ""}" data-tab="settings"><i class="fa-solid fa-sliders"></i> Settings</button>
+                <button class="tab-btn ${this.activeTab === "files" ? "active" : ""}" data-tab="files"><i class="fa-solid fa-file-arrow-up"></i> File Management</button>
             </div>
         `;
 
         let tabContent = "";
         if (this.activeTab === "users") {
             tabContent = await this.renderUsersTab();
-        } else if (this.activeTab === "audit") {
-            tabContent = await this.renderAuditTab();
-        } else if (this.activeTab === "model") {
-            tabContent = await this.renderModelTab();
-        } else if (this.activeTab === "rules") {
-            tabContent = await this.renderRulesTab();
-        } else if (this.activeTab === "notifications") {
-            tabContent = await this.renderNotificationsTab();
+        } else if (this.activeTab === "cases") {
+            tabContent = await this.renderCasesTab();
+        } else if (this.activeTab === "monitoring") {
+            tabContent = await this.renderMonitoringTab();
+        } else if (this.activeTab === "drift") {
+            tabContent = await this.renderDriftTab();
+        } else if (this.activeTab === "settings") {
+            tabContent = await this.renderSettingsTab();
+        } else if (this.activeTab === "files") {
+            tabContent = await this.renderFilesTab();
         }
 
         return `
@@ -1590,6 +1630,8 @@ const AdminView = {
             <div id="admin-tab-content-area" style="animation: slideIn 0.2s forwards;">
                 ${tabContent}
             </div>
+            
+            <div id="case-edit-modal-anchor"></div>
         `;
     },
     
@@ -1644,188 +1686,30 @@ const AdminView = {
         `;
     },
 
-    async renderAuditTab() {
-        let logs = [];
+    async renderCasesTab() {
+        let cases = [];
         try {
-            logs = await apiFetch("/api/admin/audit-logs");
+            cases = await apiFetch("/api/cases");
         } catch (err) {
-            console.error("Error loading audit logs:", err);
+            console.error("Error loading cases:", err);
         }
-
-        const rowsHtml = logs.map(l => `
-            <tr>
-                <td>ID-${l.id}</td>
-                <td>${l.action}</td>
-                <td>${new Date(l.created_at).toLocaleString()}</td>
-            </tr>
-        `).join("");
-
-        return `
-            <div class="card">
-                <div class="card-title">
-                    <i class="fa-solid fa-list-check"></i>
-                    <span>System Audit Timelines</span>
-                </div>
-                
-                <div class="table-responsive">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Log ID</th>
-                                <th>Activity Action</th>
-                                <th>Timestamp</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${rowsHtml || '<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">No system activities logged.</td></tr>'}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        `;
-    },
-
-    async renderModelTab() {
-        let perf = { version: "Unknown", roc_auc: 0.0, accuracy: 0.0, precision: 0.0, recall: 0.0, confusion_matrix: { tp: 0, fn: 0, fp: 0, tn: 0 } };
-        try {
-            perf = await apiFetch("/api/admin/model-performance");
-        } catch (err) {
-            console.error("Error loading model metrics:", err);
-        }
-
-        const matrix = perf.confusion_matrix;
-
-        return `
-            <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 24px;">
-                <div class="stat-card primary" style="padding:16px;">
-                    <div class="stat-info">
-                        <h4 style="font-size:10px;">Active Version</h4>
-                        <div class="stat-value" style="font-size:16px; font-family:'Outfit'; text-overflow:ellipsis; overflow:hidden;">${perf.version}</div>
-                    </div>
-                </div>
-                <div class="stat-card success" style="padding:16px;">
-                    <div class="stat-info">
-                        <h4 style="font-size:10px;">ROC-AUC metric</h4>
-                        <div class="stat-value" style="font-size:18px;">${(perf.roc_auc * 100).toFixed(1)}%</div>
-                    </div>
-                </div>
-                <div class="stat-card primary" style="padding:16px;">
-                    <div class="stat-info">
-                        <h4 style="font-size:10px;">Precision</h4>
-                        <div class="stat-value" style="font-size:18px;">${(perf.precision * 100).toFixed(1)}%</div>
-                    </div>
-                </div>
-                <div class="stat-card primary" style="padding:16px;">
-                    <div class="stat-info">
-                        <h4 style="font-size:10px;">Recall Rate</h4>
-                        <div class="stat-value" style="font-size:18px;">${(perf.recall * 100).toFixed(1)}%</div>
-                    </div>
-                </div>
-            </div>
-            
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
-                <!-- Confusion matrix -->
-                <div class="card" style="margin:0;">
-                    <div class="card-title"><i class="fa-solid fa-table-cells"></i> Confusion Matrix</div>
-                    <div style="display:grid; grid-template-columns: 1fr 1.5fr 1.5fr; gap:12px; text-align:center; font-size:14px; margin-top:20px;">
-                        <div></div>
-                        <div style="font-weight:600; color:var(--text-muted);">Predict Safe</div>
-                        <div style="font-weight:600; color:var(--text-muted);">Predict Fraud</div>
-                        
-                        <div style="font-weight:600; text-align:left; color:var(--text-muted);">Actual Safe</div>
-                        <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border-color); padding:12px; border-radius:4px;">
-                            ${matrix.tn} <span style="font-size:10px; color:var(--text-muted); display:block;">TN</span>
-                        </div>
-                        <div style="background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.2); padding:12px; border-radius:4px; color:var(--color-danger);">
-                            ${matrix.fp} <span style="font-size:10px; color:var(--text-muted); display:block;">FP (False Alarm)</span>
-                        </div>
-                        
-                        <div style="font-weight:600; text-align:left; color:var(--text-muted);">Actual Fraud</div>
-                        <div style="background:rgba(239,68,68,0.05); border:1px solid rgba(239,68,68,0.2); padding:12px; border-radius:4px;">
-                            ${matrix.fn} <span style="font-size:10px; color:var(--text-muted); display:block;">FN (Missed)</span>
-                        </div>
-                        <div style="background:rgba(16,185,129,0.05); border:1px solid rgba(16,185,129,0.2); padding:12px; border-radius:4px; color:var(--color-success);">
-                            ${matrix.tp} <span style="font-size:10px; color:var(--text-muted); display:block;">TP (Blocked)</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="card" style="margin:0; display:flex; flex-direction:column; justify-content:center; align-items:center; border:1px dashed var(--border-color); color:var(--text-muted);">
-                    <i class="fa-solid fa-chart-area" style="font-size:48px; margin-bottom:12px;"></i>
-                    <p>ROC Metric details extracted from local evaluate.py</p>
-                </div>
-            </div>
-        `;
-    },
-
-    async renderRulesTab() {
-        let rules = [];
-        try {
-            rules = await apiFetch("/api/admin/fraud-rules");
-        } catch (err) {
-            console.error("Error loading rules:", err);
-        }
-
-        const rowsHtml = rules.map(r => `
-            <tr>
-                <td>ID-${r.id}</td>
-                <td><strong>${r.name}</strong></td>
-                <td><code>${r.condition}</code></td>
-                <td>+${(r.score_boost * 100).toFixed(0)}%</td>
-                <td><span class="badge badge-active">${r.status}</span></td>
-            </tr>
-        `).join("");
-
-        return `
-            <div class="card">
-                <div class="card-title">
-                    <i class="fa-solid fa-shield-halved"></i>
-                    <span>Custom Behavioral Risk Rules</span>
-                </div>
-                
-                <div class="table-responsive">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Rule ID</th>
-                                <th>Rule Name</th>
-                                <th>Trigger Condition</th>
-                                <th>Risk Score Weight</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${rowsHtml || '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No rules active.</td></tr>'}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        `;
-    },
-
-    async renderNotificationsTab() {
-        let logs = [];
-        try {
-            logs = await apiFetch("/api/notifications");
-        } catch (err) {
-            console.error("Error loading notification logs:", err);
-        }
-
-        const rowsHtml = logs.map(l => {
-            const isSent = l.status === "SENT";
-            const badge = isSent ? "badge-low" : "badge-high";
+        
+        const rowsHtml = cases.map(c => {
+            let badgeClass = "badge-low";
+            if (c.status === "OPEN") badgeClass = "badge-high";
+            else if (c.status === "UNDER_INVESTIGATION") badgeClass = "badge-medium";
             
             return `
                 <tr>
-                    <td>AL-${l.id}</td>
-                    <td>${l.customer_name}</td>
-                    <td>TX-${l.transaction_id}</td>
-                    <td>$${l.amount.toFixed(2)}</td>
-                    <td><span class="badge ${badge}">${l.status}</span></td>
-                    <td>${new Date(l.created_at).toLocaleString()}</td>
+                    <td>CASE-${c.id}</td>
+                    <td>TX-${c.transaction_id}</td>
+                    <td>$${c.amount.toFixed(2)}</td>
+                    <td>${(c.fraud_probability * 100).toFixed(1)}%</td>
+                    <td><span class="badge ${badgeClass}">${c.status}</span></td>
+                    <td>${c.assigned_to || '<em>Unassigned</em>'}</td>
                     <td>
-                        <button class="btn btn-secondary btn-resend-email" data-id="${l.id}" style="padding: 6px 12px; font-size:11px; width:auto;">
-                            <i class="fa-solid fa-rotate"></i> Resend
+                        <button class="btn btn-secondary btn-edit-case" data-id="${c.id}" style="padding:6px 12px; font-size:11px; width:auto;">
+                            <i class="fa-solid fa-edit"></i> Review Case
                         </button>
                     </td>
                 </tr>
@@ -1835,25 +1719,24 @@ const AdminView = {
         return `
             <div class="card">
                 <div class="card-title">
-                    <i class="fa-solid fa-envelope-circle-check"></i>
-                    <span>Fraud Email Alert Dispatch logs</span>
+                    <i class="fa-solid fa-folder-open"></i>
+                    <span>Active Fraud Cases</span>
                 </div>
-                
                 <div class="table-responsive">
                     <table class="table">
                         <thead>
                             <tr>
-                                <th>Alert ID</th>
-                                <th>Customer Name</th>
+                                <th>Case ID</th>
                                 <th>Transaction ID</th>
                                 <th>Amount</th>
+                                <th>Fraud Prob</th>
                                 <th>Status</th>
-                                <th>Datetime</th>
-                                <th>Actions</th>
+                                <th>Assigned To</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${rowsHtml || '<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No notifications sent yet.</td></tr>'}
+                            ${rowsHtml || '<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">No active fraud cases found.</td></tr>'}
                         </tbody>
                     </table>
                 </div>
@@ -1861,15 +1744,241 @@ const AdminView = {
         `;
     },
 
+    async renderMonitoringTab() {
+        let m = { cpu_usage_pct: 0.0, memory_usage_pct: 0.0, total_requests_processed: 0, error_count: 0, active_sessions_count: 0, avg_ml_inference_latency_ms: 0.0 };
+        try {
+            m = await apiFetch("/api/monitoring/metrics");
+        } catch (err) {
+            console.error("Error loading system metrics:", err);
+        }
+
+        return `
+            <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom:24px;">
+                <div class="stat-card primary">
+                    <div class="stat-info">
+                        <h4>API Requests</h4>
+                        <div class="stat-value">${m.total_requests_processed}</div>
+                    </div>
+                </div>
+                <div class="stat-card danger">
+                    <div class="stat-info">
+                        <h4>Logged Errors</h4>
+                        <div class="stat-value">${m.error_count}</div>
+                    </div>
+                </div>
+                <div class="stat-card success">
+                    <div class="stat-info">
+                        <h4>ML Inference Latency</h4>
+                        <div class="stat-value">${m.avg_ml_inference_latency_ms} ms</div>
+                    </div>
+                </div>
+                <div class="stat-card warning">
+                    <div class="stat-info">
+                        <h4>Active Sessions</h4>
+                        <div class="stat-value">${m.active_sessions_count}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+                <div class="card" style="margin:0;">
+                    <div class="card-title"><i class="fa-solid fa-microchip"></i> CPU Load</div>
+                    <div style="margin-top:20px; text-align:center;">
+                        <div style="font-size:32px; font-weight:700; margin-bottom:12px;">${m.cpu_usage_pct}%</div>
+                        <div style="background:rgba(255,255,255,0.05); border-radius:10px; height:12px; overflow:hidden;">
+                            <div style="background:var(--color-primary); width:${m.cpu_usage_pct}%; height:100%; transition: width 0.5s;"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card" style="margin:0;">
+                    <div class="card-title"><i class="fa-solid fa-memory"></i> Memory Utilization</div>
+                    <div style="margin-top:20px; text-align:center;">
+                        <div style="font-size:32px; font-weight:700; margin-bottom:12px;">${m.memory_usage_pct}%</div>
+                        <div style="background:rgba(255,255,255,0.05); border-radius:10px; height:12px; overflow:hidden;">
+                            <div style="background:var(--color-success); width:${m.memory_usage_pct}%; height:100%; transition: width 0.5s;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    async renderDriftTab() {
+        let drift = { status: "STABLE", overall_psi: 0.0, baseline_dataset: "creditcard.csv", target_dataset: "live", feature_metrics: {} };
+        try {
+            drift = await apiFetch("/api/model-monitoring/drift");
+        } catch (err) {
+            console.error("Error loading drift stats:", err);
+        }
+
+        const isDrift = drift.status !== "STABLE";
+        const statusBadge = isDrift ? "badge-high" : "badge-low";
+
+        // Generate list of high drift features
+        let driftListHtml = "";
+        for (const [feat, psi] of Object.entries(drift.feature_metrics)) {
+            if (psi >= 0.1) {
+                driftListHtml += `
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-color);">
+                        <span>Feature <strong>${feat}</strong></span>
+                        <span style="font-family:monospace; color:${psi >= 0.25 ? 'var(--color-danger)' : 'var(--color-warning)'}">${psi.toFixed(4)} PSI</span>
+                    </div>
+                `;
+            }
+        }
+
+        return `
+            <div class="card-grid" style="grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); margin-bottom:24px;">
+                <div class="stat-card primary">
+                    <div class="stat-info">
+                        <h4>Stability Status</h4>
+                        <div class="stat-value" style="font-size:18px;"><span class="badge ${statusBadge}">${drift.status}</span></div>
+                    </div>
+                </div>
+                <div class="stat-card primary">
+                    <div class="stat-info">
+                        <h4>Overall Population Stability Index</h4>
+                        <div class="stat-value">${drift.overall_psi}</div>
+                    </div>
+                </div>
+                <div class="stat-card primary">
+                    <div class="stat-info">
+                        <h4>Drift Checks Target Logs</h4>
+                        <div class="stat-value" style="font-size:16px;">${drift.predictions_monitored_count} rows</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="display:grid; grid-template-columns: 2fr 1fr; gap:20px;">
+                <div class="card" style="margin:0;">
+                    <div class="card-title"><i class="fa-solid fa-chart-bar"></i> Feature PSI Distribution</div>
+                    <div class="chart-wrapper" style="height:250px;">
+                        <canvas id="drift-bar-canvas"></canvas>
+                    </div>
+                </div>
+                
+                <div class="card" style="margin:0;">
+                    <div class="card-title"><i class="fa-solid fa-triangle-exclamation"></i> Moderate/Significant Drift</div>
+                    <div style="margin-top:16px;">
+                        ${driftListHtml || '<p style="font-size:12px; color:var(--text-muted); text-align:center;">All features stable (PSI < 0.10).</p>'}
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    async renderSettingsTab() {
+        let conf = { fraud_threshold: 0.5, smtp_host: "", smtp_port: 587, smtp_user: "", session_timeout_minutes: 60, security_mode: "HIGH" };
+        try {
+            conf = await apiFetch("/api/config");
+        } catch (err) {
+            console.error("Error loading config:", err);
+        }
+
+        return `
+            <div class="card" style="max-width: 650px; margin:0 auto;">
+                <div class="card-title"><i class="fa-solid fa-sliders"></i> Edit System Configurations</div>
+                
+                <form id="form-admin-settings">
+                    <div class="form-group">
+                        <label class="form-label" style="display:flex; justify-content:space-between;">
+                            <span>Fraud Threshold Score</span>
+                            <strong id="label-threshold-val">${conf.fraud_threshold}</strong>
+                        </label>
+                        <input type="range" min="0.05" max="0.95" step="0.05" class="form-control" style="padding:0; accent-color:var(--color-primary);" id="settings-threshold" value="${conf.fraud_threshold}">
+                        <span style="font-size:10px; color:var(--text-muted); display:block; margin-top:4px;">
+                            Transactions with probability score greater than this limit will automatically generate fraud alarms and cases.
+                        </span>
+                    </div>
+                    
+                    <div style="display:grid; grid-template-columns: 2fr 1fr; gap:16px; margin-bottom:16px;">
+                        <div class="form-group">
+                            <label class="form-label">SMTP Host</label>
+                            <input type="text" class="form-control" style="padding-left:12px;" id="settings-smtp-host" required value="${conf.smtp_host}">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">SMTP Port</label>
+                            <input type="number" class="form-control" style="padding-left:12px;" id="settings-smtp-port" required value="${conf.smtp_port}">
+                        </div>
+                    </div>
+                    
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:16px;">
+                        <div class="form-group">
+                            <label class="form-label">SMTP Username</label>
+                            <input type="email" class="form-control" style="padding-left:12px;" id="settings-smtp-user" required value="${conf.smtp_user}">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Session Idle Timeout (Min)</label>
+                            <input type="number" class="form-control" style="padding-left:12px;" id="settings-timeout" required value="${conf.session_timeout_minutes}">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Security Settings Profile</label>
+                        <select class="dropdown-select" id="settings-security" style="margin:0;">
+                            <option value="STANDARD" ${conf.security_mode === 'STANDARD' ? 'selected' : ''}>Standard Profile (Basic hashing & verification)</option>
+                            <option value="HIGH" ${conf.security_mode === 'HIGH' ? 'selected' : ''}>High Profile (JWT short expiries, lockout checking)</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn" id="btn-save-settings"><i class="fa-solid fa-save"></i> Save Configurations</button>
+                </form>
+            </div>
+        `;
+    },
+
+    async renderFilesTab() {
+        return `
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+                <!-- Model upload -->
+                <div class="card" style="margin:0;">
+                    <div class="card-title"><i class="fa-solid fa-file-export"></i> Model staging (.pkl)</div>
+                    <form id="form-upload-pkl">
+                        <div class="upload-dropzone" id="stage-model-dropzone" style="padding:32px;">
+                            <i class="fa-solid fa-brain" style="font-size:36px;"></i>
+                            <p style="font-size:12px; margin-top:8px;">Drag/Select staged binary (.pkl)</p>
+                            <input type="file" id="pkl-file-input" class="file-input" accept=".pkl" required>
+                        </div>
+                        <button type="submit" class="btn" style="margin-top:16px;" id="btn-upload-pkl-submit">Stage Model Binary</button>
+                    </form>
+                </div>
+                
+                <!-- Training Dataset upload -->
+                <div class="card" style="margin:0;">
+                    <div class="card-title"><i class="fa-solid fa-database"></i> Training Partition (.csv)</div>
+                    <form id="form-upload-dataset">
+                        <div class="upload-dropzone" id="dataset-dropzone" style="padding:32px;">
+                            <i class="fa-solid fa-table" style="font-size:36px;"></i>
+                            <p style="font-size:12px; margin-top:8px;">Drag/Select Training CSV</p>
+                            <input type="file" id="csv-file-input" class="file-input" accept=".csv" required>
+                        </div>
+                        <button type="submit" class="btn" style="margin-top:16px;" id="btn-upload-dataset-submit">Upload Dataset</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card" style="margin-top:24px;">
+                <div class="card-title"><i class="fa-solid fa-download"></i> System Audited Reports</div>
+                <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
+                    Generate and download local copies of aggregate fraud case statistics.
+                </p>
+                <div class="btn-group" style="width:auto; display:inline-flex;">
+                    <button class="btn btn-secondary btn-download-report" data-type="csv" style="width:auto;"><i class="fa-solid fa-file-csv"></i> Download CSV report</button>
+                    <button class="btn btn-secondary btn-download-report" data-type="pdf" style="width:auto;"><i class="fa-solid fa-file-pdf"></i> Download PDF report</button>
+                </div>
+            </div>
+        `;
+    },
+
     init() {
-        // Wire up sub-tabs buttons click handlers
+        // Tab click wireups
         const tabButtons = document.querySelectorAll(".tab-btn");
         tabButtons.forEach(btn => {
             btn.onclick = async (e) => {
                 const choice = e.currentTarget.getAttribute("data-tab");
                 this.activeTab = choice;
                 
-                // Re-render
                 const shell = document.getElementById("app-shell");
                 if (shell) {
                     const contentHtml = await this.render();
@@ -1884,54 +1993,270 @@ const AdminView = {
             };
         });
 
-        // Wire up Block Analyst action buttons
-        if (this.activeTab === "users") {
-            const blockButtons = document.querySelectorAll(".btn-block-user");
-            blockButtons.forEach(btn => {
+        // Initialize Settings tab forms
+        if (this.activeTab === "settings") {
+            const range = document.getElementById("settings-threshold");
+            const rangeLabel = document.getElementById("label-threshold-val");
+            if (range && rangeLabel) {
+                range.addEventListener("input", (e) => {
+                    rangeLabel.innerText = e.target.value;
+                });
+            }
+            
+            const form = document.getElementById("form-admin-settings");
+            if (form) {
+                form.onsubmit = async (e) => {
+                    e.preventDefault();
+                    const submitBtn = document.getElementById("btn-save-settings");
+                    submitBtn.disabled = true;
+                    
+                    const payload = {
+                        fraud_threshold: parseFloat(range.value),
+                        smtp_host: document.getElementById("settings-smtp-host").value,
+                        smtp_port: parseInt(document.getElementById("settings-smtp-port").value),
+                        smtp_user: document.getElementById("settings-smtp-user").value,
+                        session_timeout_minutes: parseInt(document.getElementById("settings-timeout").value),
+                        security_mode: document.getElementById("settings-security").value
+                    };
+                    
+                    try {
+                        await apiFetch("/api/config", {
+                            method: "PUT",
+                            body: JSON.stringify(payload)
+                        });
+                        showToast("System configurations saved successfully!");
+                    } catch (err) {
+                        showToast(err.message, "error");
+                    } finally {
+                        submitBtn.disabled = false;
+                    }
+                };
+            }
+        }
+
+        // Initialize Cases Tab Buttons
+        if (this.activeTab === "cases") {
+            const editButtons = document.querySelectorAll(".btn-edit-case");
+            editButtons.forEach(btn => {
                 btn.onclick = async (e) => {
-                    const userId = e.target.getAttribute("data-id");
-                    if (confirm("Are you sure you want to block this user analyst?")) {
-                        try {
-                            await apiFetch(`/api/users/${userId}/block`, {
-                                method: "PUT"
-                            });
-                            showToast("User blocked successfully!");
-                            // Force refresh users sub-tab content
-                            const content = await this.renderUsersTab();
-                            document.getElementById("admin-tab-content-area").innerHTML = content;
-                            this.init();
-                        } catch (err) {
-                            showToast(err.message, "error");
-                        }
+                    const id = e.currentTarget.getAttribute("data-id");
+                    // Fetch list of cases to find correct details
+                    const cases = await apiFetch("/api/cases");
+                    const targetCase = cases.find(c => c.id == id);
+                    if (targetCase) {
+                        openEditCaseModal(targetCase);
                     }
                 };
             });
         }
 
-        // Wire up Resend Email actions
-        if (this.activeTab === "notifications") {
-            const resendButtons = document.querySelectorAll(".btn-resend-email");
-            resendButtons.forEach(btn => {
-                btn.onclick = async (e) => {
-                    const logId = e.currentTarget.getAttribute("data-id");
+        // Initialize Model Drift charts
+        if (this.activeTab === "drift") {
+            apiFetch("/api/model-monitoring/drift").then(drift => {
+                const labels = Object.keys(drift.feature_metrics);
+                const values = Object.values(drift.feature_metrics);
+                
+                const canvas = document.getElementById("drift-bar-canvas");
+                if (canvas) {
+                    const ctx = canvas.getContext("2d");
+                    new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Feature PSI',
+                                data: values,
+                                backgroundColor: values.map(v => v >= 0.25 ? 'rgba(239, 68, 68, 0.7)' : (v >= 0.1 ? 'rgba(245, 158, 11, 0.7)' : 'rgba(16, 185, 129, 0.7)')),
+                                borderWidth: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                x: { ticks: { display: false }, grid: { display: false } },
+                                y: { grid: { color: '#273549' }, ticks: { color: '#94a3b8' } }
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
+        // Initialize File Upload handlers
+        if (this.activeTab === "files") {
+            const stagePkl = document.getElementById("stage-model-dropzone");
+            const pklInput = document.getElementById("pkl-file-input");
+            const formPkl = document.getElementById("form-upload-pkl");
+            
+            if (stagePkl && pklInput) {
+                stagePkl.onclick = () => pklInput.click();
+                pklInput.onchange = () => {
+                    stagePkl.querySelector("p").innerText = pklInput.files.length ? pklInput.files[0].name : "Select staged model (.pkl)";
+                };
+            }
+            
+            if (formPkl) {
+                formPkl.onsubmit = async (e) => {
+                    e.preventDefault();
+                    const submitBtn = document.getElementById("btn-upload-pkl-submit");
+                    submitBtn.disabled = true;
+                    
+                    const formData = new FormData();
+                    formData.append("file", pklInput.files[0]);
+                    
                     try {
-                        const res = await apiFetch(`/api/notifications/${logId}/resend`, {
-                            method: "POST"
-                        });
-                        showToast(res.message);
+                        const headers = {};
+                        if (state.token) headers["Authorization"] = `Bearer ${state.token}`;
                         
-                        // Force refresh notifications sub-tab
-                        const content = await this.renderNotificationsTab();
-                        document.getElementById("admin-tab-content-area").innerHTML = content;
-                        this.init();
+                        const res = await fetch(`${window.location.origin}/api/files/models`, {
+                            method: "POST",
+                            body: formData,
+                            headers
+                        });
+                        
+                        if (!res.ok) throw new Error("Staging failed");
+                        showToast("Model binary staged successfully!");
                     } catch (err) {
                         showToast(err.message, "error");
+                    } finally {
+                        submitBtn.disabled = false;
                     }
+                };
+            }
+
+            const stageCsv = document.getElementById("dataset-dropzone");
+            const csvInput = document.getElementById("csv-file-input");
+            const formCsv = document.getElementById("form-upload-dataset");
+            
+            if (stageCsv && csvInput) {
+                stageCsv.onclick = () => csvInput.click();
+                csvInput.onchange = () => {
+                    stageCsv.querySelector("p").innerText = csvInput.files.length ? csvInput.files[0].name : "Select training dataset (.csv)";
+                };
+            }
+            
+            if (formCsv) {
+                formCsv.onsubmit = async (e) => {
+                    e.preventDefault();
+                    const submitBtn = document.getElementById("btn-upload-dataset-submit");
+                    submitBtn.disabled = true;
+                    
+                    const formData = new FormData();
+                    formData.append("file", csvInput.files[0]);
+                    
+                    try {
+                        const headers = {};
+                        if (state.token) headers["Authorization"] = `Bearer ${state.token}`;
+                        
+                        const res = await fetch(`${window.location.origin}/api/files/datasets`, {
+                            method: "POST",
+                            body: formData,
+                            headers
+                        });
+                        
+                        if (!res.ok) throw new Error("Dataset upload failed");
+                        showToast("Training dataset uploaded successfully!");
+                    } catch (err) {
+                        showToast(err.message, "error");
+                    } finally {
+                        submitBtn.disabled = false;
+                    }
+                };
+            }
+
+            // Download reports trigger
+            const dlButtons = document.querySelectorAll(".btn-download-report");
+            dlButtons.forEach(btn => {
+                btn.onclick = (e) => {
+                    const type = e.currentTarget.getAttribute("data-type");
+                    window.open(`${window.location.origin}/api/files/reports/${type}?token=${state.token}`);
+                    showToast(`Report downloaded successfully!`);
                 };
             });
         }
     }
 };
+
+// FRAUD CASE EDIT MODAL
+function openEditCaseModal(c) {
+    const anchor = document.getElementById("case-edit-modal-anchor");
+    if (!anchor) return;
+    
+    anchor.innerHTML = `
+        <div class="modal-overlay" id="case-modal-overlay">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Review Case: CASE-${c.id} (TX-${c.transaction_id})</h3>
+                    <button class="modal-close-btn" id="btn-close-case-modal">&times;</button>
+                </div>
+                
+                <form id="form-edit-case">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+                        <div class="form-group">
+                            <label class="form-label">Assign Investigator Email</label>
+                            <input type="email" class="form-control" style="padding-left:12px;" id="case-assigned" required value="${c.assigned_to || state.user.email}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Review Status</label>
+                            <select class="dropdown-select" id="case-status" style="margin:0;">
+                                <option value="OPEN" ${c.status === 'OPEN' ? 'selected' : ''}>OPEN</option>
+                                <option value="UNDER_INVESTIGATION" ${c.status === 'UNDER_INVESTIGATION' ? 'selected' : ''}>UNDER INVESTIGATION</option>
+                                <option value="CLOSED_RESOLVED" ${c.status === 'CLOSED_RESOLVED' ? 'selected' : ''}>CLOSED (False Alarm / Resolved)</option>
+                                <option value="CLOSED_FRAUD" ${c.status === 'CLOSED_FRAUD' ? 'selected' : ''}>CLOSED (Confirmed Fraud Alert)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Investigation Notes</label>
+                        <textarea class="form-control" style="padding:12px; height:80px; font-family:inherit; resize:none;" id="case-notes" required placeholder="Add audit trace notes...">${c.notes || ''}</textarea>
+                    </div>
+                    
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" style="width:auto;" id="btn-cancel-case">Cancel</button>
+                        <button type="submit" class="btn" style="width:auto;" id="btn-save-case-submit">Commit Review Settings</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    `;
+    
+    const closeModal = () => anchor.innerHTML = "";
+    document.getElementById("btn-close-case-modal").onclick = closeModal;
+    document.getElementById("btn-cancel-case").onclick = closeModal;
+    
+    document.getElementById("form-edit-case").onsubmit = async (e) => {
+        e.preventDefault();
+        const saveBtn = document.getElementById("btn-save-case-submit");
+        saveBtn.disabled = true;
+        
+        const payload = {
+            assigned_to: document.getElementById("case-assigned").value,
+            status: document.getElementById("case-status").value,
+            notes: document.getElementById("case-notes").value
+        };
+        
+        try {
+            await apiFetch(`/api/cases/${c.id}`, {
+                method: "PUT",
+                body: JSON.stringify(payload)
+            });
+            showToast("Fraud Case details updated successfully!");
+            closeModal();
+            // Refresh Cases View
+            const content = await AdminView.renderCasesTab();
+            document.getElementById("admin-tab-content-area").innerHTML = content;
+            AdminView.init();
+        } catch (err) {
+            showToast(err.message, "error");
+        } finally {
+            saveBtn.disabled = false;
+        }
+    };
+}
 
 /* ----------------------------------
    App Navigation Routing Map
@@ -1954,14 +2279,12 @@ const routes = {
 async function handleRouter() {
     const rawHash = window.location.hash || "#/dashboard";
     
-    // Parse query parameters
     const parts = rawHash.split("?");
     const hash = parts[0];
     const query = parts[1] || "";
     
     const isAuthPage = hash === "#/login" || hash === "#/register" || hash === "#/forgot-password" || hash === "#/reset-password";
     
-    // Auth Guard redirects
     if (!state.isAuthenticated() && !isAuthPage) {
         window.location.hash = "#/login";
         renderView(LoginView, "Login");
@@ -1973,7 +2296,6 @@ async function handleRouter() {
         return;
     }
     
-    // Role-based Access Guards
     if (state.isAuthenticated()) {
         const role = state.getUserRole();
         if (hash === "#/admin" && role !== "ADMIN") {
@@ -2007,7 +2329,6 @@ async function handleRouter() {
     }
 }
 
-// Render dynamic html templates to Shell
 async function renderView(view, title) {
     const shell = document.getElementById("app-shell");
     if (!shell) return;
@@ -2029,7 +2350,6 @@ async function renderView(view, title) {
     }
 }
 
-// Hook sidebar action buttons
 function attachShellEvents() {
     const logoutBtn = document.getElementById("btn-sidebar-logout");
     if (logoutBtn) {
@@ -2049,6 +2369,11 @@ function attachShellEvents() {
     }
 }
 
-// Start listeners
+// Start listeners & polling
 window.addEventListener("hashchange", handleRouter);
-window.addEventListener("DOMContentLoaded", handleRouter);
+window.addEventListener("DOMContentLoaded", () => {
+    handleRouter();
+    if (state.isAuthenticated()) {
+        startNotificationPolling();
+    }
+});

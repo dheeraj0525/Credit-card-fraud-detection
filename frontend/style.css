@@ -961,3 +961,24 @@ a:hover {
     box-shadow: 0 0 0 1px var(--border-color);
 }
 
+/* ----------------------------------
+   In-app Warning Alerts Banner
+   ---------------------------------- */
+.in-app-banner {
+    background-color: var(--color-danger);
+    color: #131a26;
+    font-weight: 700;
+    padding: 12px 40px;
+    position: sticky;
+    top: 0;
+    z-index: 999;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+    display: none;
+    animation: slideDown 0.3s var(--transition-curve);
+}
+
+@keyframes slideDown {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+}
+
