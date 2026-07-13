@@ -165,5 +165,49 @@ class TestProductionReadiness(unittest.TestCase):
             body = json.loads(err.read().decode())
             self.assertIn("Invalid email", body["detail"])
 
+    # 8. Load & Concurrency Performance Tests
+    def test_load_concurrency(self):
+        tx_payload = {
+            "Time": 1.0, "Amount": 150.0,
+            "V1": 0.0, "V2": 0.0, "V3": 0.0, "V4": 0.0, "V5": 0.0, "V6": 0.0, "V7": 0.0, "V8": 0.0,
+            "V9": 0.0, "V10": 0.0, "V11": 0.0, "V12": 0.0, "V13": 0.0, "V14": 0.0, "V15": 0.0, "V16": 0.0,
+            "V17": 0.0, "V18": 0.0, "V19": 0.0, "V20": 0.0, "V21": 0.0, "V22": 0.0, "V23": 0.0, "V24": 0.0,
+            "V25": 0.0, "V26": 0.0, "V27": 0.0, "V28": 0.0
+        }
+        payload_data = json.dumps(tx_payload).encode()
+        
+        results = []
+        threads = []
+        
+        def worker():
+            start = time.time()
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{TEST_PORT}/api/transactions/score",
+                data=payload_data,
+                headers={"Content-Type": "application/json", "X-Skip-Rate-Limit": "True"}
+            )
+            try:
+                with urllib.request.urlopen(req) as resp:
+                    if resp.status == 200:
+                        results.append(time.time() - start)
+            except Exception:
+                pass
+                
+        # Spawn 20 concurrent threads
+        for _ in range(20):
+            t = threading.Thread(target=worker)
+            threads.append(t)
+            t.start()
+            
+        for t in threads:
+            t.join()
+            
+        print(f"\nConcurrency Load Test: Successfully executed {len(results)} requests concurrently.")
+        self.assertEqual(len(results), 20)
+        max_lat = max(results) * 1000
+        print(f"Max concurrent latency: {max_lat:.2f} ms")
+        self.assertLess(max_lat, 1500)  # Max latency under concurrency must be less than 1500ms
+
 if __name__ == "__main__":
     unittest.main()
+
