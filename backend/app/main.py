@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -132,7 +132,7 @@ def favicon():
     if os.path.exists(favicon_path):
         return FileResponse(favicon_path)
 
-    return JSONResponse(status_code=204, content={})
+    return Response(status_code=204)
 
 # ----------------------------------
 # Input Schema
@@ -205,9 +205,24 @@ def predict_fraud(transaction: TransactionInput, db: Session = Depends(get_db)):
 # Static Frontend Mounting
 # ----------------------------------
 FRONTEND_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "frontend")
+    os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
 )
-app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+class SPAStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as ex:
+            if ex.status_code == 404:
+                return await super().get_response("index.html", scope)
+            raise ex
+
+if os.path.exists(FRONTEND_DIR):
+    app.mount("/", SPAStaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+else:
+    logger.warning(f"Frontend dist directory not found at {FRONTEND_DIR}. Static serving disabled.")
 
 # ----------------------------------
 # Local Run

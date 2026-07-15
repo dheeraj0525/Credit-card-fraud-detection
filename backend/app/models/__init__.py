@@ -2,7 +2,7 @@ from app.core.database import Base
 from .user import User
 from .transaction import Transaction
 from .audit_log import AuditLog
-from .watchlist import WatchList
+from .wachlist import WatchList
 from .bank_analysis import BankTransaction, BehaviouralProfile
 from .notification_log import NotificationLog
 from .case_management import FraudCase

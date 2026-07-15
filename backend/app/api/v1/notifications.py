@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.models.notification_log import NotificationLog
 from app.models.user import User
-from app.core.security_dep import get_current_user
+from app.core.dependencies import get_current_user
 
 router = APIRouter(
     prefix="/notifications",

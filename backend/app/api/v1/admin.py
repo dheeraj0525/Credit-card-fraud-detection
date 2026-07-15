@@ -8,7 +8,7 @@ from app.core.database import get_db
 from app.models.user import User
 from app.models.transaction import Transaction
 from app.models.audit_log import AuditLog
-from app.core.security_dep import get_admin_user, get_current_user
+from app.core.dependencies import get_admin_user, get_current_user
 
 router = APIRouter(prefix="/admin", tags=["Admin Control Panel"])
 

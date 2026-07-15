@@ -10,7 +10,7 @@ from app.services.transaction_service import save_transaction
 from app.tasks.batch_score import batch_score_transactions
 from app.models.user import User
 from app.models.transaction import Transaction
-from app.core.security_dep import get_current_user
+from app.core.dependencies import get_current_user
 
 router = APIRouter(
     prefix="/transactions",

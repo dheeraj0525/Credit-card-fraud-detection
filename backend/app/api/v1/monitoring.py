@@ -6,7 +6,7 @@ import time
 from app.core.database import get_db
 from app.models.in_app_notification import InAppNotification
 from app.models.user import User
-from app.core.security_dep import get_current_user
+from app.core.dependencies import get_current_user
 
 router = APIRouter(
     prefix="/monitoring",

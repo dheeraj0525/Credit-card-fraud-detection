@@ -4,7 +4,7 @@ import os
 import json
 
 from app.models.user import User
-from app.core.security_dep import get_admin_user, get_current_user
+from app.core.dependencies import get_admin_user, get_current_user
 
 router = APIRouter(
     prefix="/config",
