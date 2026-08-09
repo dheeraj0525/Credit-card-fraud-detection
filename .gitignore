@@ -19,6 +19,7 @@ venv/
 backend/ml/data/
 backend/ml/models/
 backend/ml/notebooks/
+backend/tests/data/
 
 # ======================
 # Node / Frontend

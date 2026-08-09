@@ -51,7 +51,7 @@ def main():
     np.save(os.path.join(OUTPUT_DIR, "X_test.npy"), X_test.values)
     np.save(os.path.join(OUTPUT_DIR, "y_test.npy"), y_test.values)
 
-    print("Preprocessing complete ✅")
+    print("Preprocessing complete [OK]")
     print("Original training size:", X_train.shape)
     print("Resampled training size:", X_train_resampled.shape)
     print("Fraud ratio after SMOTE:", np.mean(y_train_resampled))
