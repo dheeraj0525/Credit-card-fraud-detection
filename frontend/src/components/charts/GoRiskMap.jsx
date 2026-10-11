@@ -1,31 +1,34 @@
 import React from "react";
+import { MapPin } from "lucide-react";
 
 export function GoRiskMap() {
   const locations = [
-    { city: "Miami, FL", count: 52, percentage: 88, status: "High Risk" },
-    { city: "New York, NY", count: 38, percentage: 72, status: "Medium Risk" },
-    { city: "Chicago, IL", count: 19, percentage: 45, status: "Medium Risk" },
-    { city: "Los Angeles, CA", count: 12, percentage: 30, status: "Low Risk" },
-    { city: "Austin, TX", count: 4, percentage: 12, status: "Low Risk" }
+    { city: "Miami Metro Area, FL", count: 52, percentage: 88, status: "High Risk", color: "bg-red-500", text: "text-red-400" },
+    { city: "New York Tri-State, NY", count: 38, percentage: 72, status: "Moderate", color: "bg-amber-500", text: "text-amber-400" },
+    { city: "Greater Chicago, IL", count: 19, percentage: 45, status: "Moderate", color: "bg-amber-500", text: "text-amber-400" },
+    { city: "Los Angeles Basin, CA", count: 12, percentage: 30, status: "Low Risk", color: "bg-emerald-500", text: "text-emerald-400" },
+    { city: "Austin Tech Hub, TX", count: 4, percentage: 12, status: "Low Risk", color: "bg-emerald-500", text: "text-emerald-400" }
   ];
 
   return (
-    <div className="flex flex-col gap-4 w-full">
+    <div className="flex flex-col gap-3.5 w-full">
       {locations.map((loc, idx) => (
-        <div key={idx} className="flex flex-col gap-1.5">
-          <div className="flex justify-between text-xs font-semibold text-slate-300">
-            <span>{loc.city} ({loc.count} Alerts)</span>
-            <span className={
-              loc.status === "High Risk" ? "text-red-400" :
-              loc.status === "Medium Risk" ? "text-amber-400" : "text-emerald-400"
-            }>{loc.status}</span>
+        <div key={idx} className="flex flex-col gap-1.5 p-2 rounded-lg bg-slate-950/40 border border-slate-850">
+          <div className="flex justify-between items-center text-xs">
+            <span className="font-semibold text-slate-200 flex items-center gap-1.5">
+              <MapPin className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+              {loc.city}
+            </span>
+            <div className="flex items-center gap-2 font-mono">
+              <span className="text-slate-400 text-[11px]">{loc.count} events</span>
+              <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border border-current/20 ${loc.text}`}>
+                {loc.status}
+              </span>
+            </div>
           </div>
-          <div className="h-2 w-full rounded-full bg-slate-800 overflow-hidden">
+          <div className="h-1.5 w-full rounded-full bg-slate-800/80 overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-500 ${
-                loc.status === "High Risk" ? "bg-red-500" :
-                loc.status === "Medium Risk" ? "bg-amber-500" : "bg-emerald-500"
-              }`}
+              className={`h-full rounded-full transition-all duration-500 ${loc.color}`}
               style={{ width: `${loc.percentage}%` }}
             />
           </div>

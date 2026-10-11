@@ -3,12 +3,15 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from ".
 import { formatCurrency } from "../../utils/formatcurrency";
 import { formatDate } from "../../utils/FormatDate";
 import { getRiskColorClass } from "../../utils/riskColor";
+import { ShieldCheck, Eye } from "lucide-react";
 
 export function TransactionTable({ transactions = [], onSelect }) {
   if (transactions.length === 0) {
     return (
-      <div className="text-center py-8 text-slate-500 border border-dashed border-slate-800 rounded-lg">
-        No transaction history records found.
+      <div className="flex flex-col items-center justify-center py-12 text-center bg-slate-950/40 rounded-xl border border-slate-850">
+        <ShieldCheck className="h-8 w-8 text-emerald-400 mb-2" />
+        <span className="text-sm font-semibold text-slate-200">No Transaction Records</span>
+        <span className="text-xs text-slate-500 mt-0.5">Execution logs will populate automatically as inferences run.</span>
       </div>
     );
   }
@@ -17,38 +20,39 @@ export function TransactionTable({ transactions = [], onSelect }) {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>ID</TableHead>
+          <TableHead>Transaction ID</TableHead>
           <TableHead>Date & Time</TableHead>
-          <TableHead>Amount</TableHead>
-          <TableHead>Risk Level</TableHead>
+          <TableHead>Charge Amount</TableHead>
+          <TableHead>Risk Classification</TableHead>
           <TableHead>Fraud Score</TableHead>
           <TableHead>Audit Status</TableHead>
-          <TableHead>Actions</TableHead>
+          <TableHead className="text-right">Action</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {transactions.map((tx) => (
           <TableRow key={tx.id}>
-            <TableCell className="font-semibold text-slate-200">TX-{tx.id}</TableCell>
-            <TableCell>{formatDate(tx.created_at)}</TableCell>
-            <TableCell className="font-bold text-slate-100">{formatCurrency(tx.amount)}</TableCell>
+            <TableCell className="font-mono font-bold text-slate-200">TX-{tx.id}</TableCell>
+            <TableCell className="font-mono text-slate-400 text-[11px]">{formatDate(tx.created_at)}</TableCell>
+            <TableCell className="font-mono font-bold text-slate-100">{formatCurrency(tx.amount)}</TableCell>
             <TableCell>
-              <span className={`px-2 py-0.5 text-xs font-semibold rounded-full border ${getRiskColorClass(tx.risk_level)}`}>
+              <span className={`soc-badge ${getRiskColorClass(tx.risk_level)}`}>
                 {tx.risk_level}
               </span>
             </TableCell>
-            <TableCell className="font-mono text-slate-200">{(tx.fraud_probability * 100).toFixed(1)}%</TableCell>
+            <TableCell className="font-mono font-bold text-slate-200">{(tx.fraud_probability * 100).toFixed(1)}%</TableCell>
             <TableCell>
-              <span className={`text-xs ${tx.status === 'APPROVED' ? 'text-emerald-500' : tx.status === 'FLAGGED_FRAUD' ? 'text-red-500' : 'text-amber-400 font-medium'}`}>
-                {tx.audited_by ? `${tx.status}` : "Awaiting Audit"}
+              <span className={`text-xs font-mono font-semibold ${tx.status === 'APPROVED' ? 'text-emerald-400' : tx.status === 'FLAGGED_FRAUD' ? 'text-red-400' : 'text-slate-400'}`}>
+                {tx.audited_by ? tx.status : "Awaiting Audit"}
               </span>
             </TableCell>
-            <TableCell>
+            <TableCell className="text-right">
               <button
-                onClick={() => onSelect(tx)}
-                className="text-xs text-blue-500 hover:text-blue-400 font-semibold cursor-pointer"
+                onClick={() => onSelect && onSelect(tx)}
+                className="text-xs font-semibold px-2.5 py-1 bg-slate-900 hover:bg-slate-800 text-blue-400 hover:text-blue-300 rounded border border-slate-800 cursor-pointer transition-colors inline-flex items-center gap-1"
               >
-                Inspect
+                <Eye className="h-3 w-3" />
+                <span>Inspect</span>
               </button>
             </TableCell>
           </TableRow>

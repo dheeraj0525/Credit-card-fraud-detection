@@ -11,7 +11,7 @@ export function formatDate(dateString) {
       minute: "2-digit",
       second: "2-digit",
     });
-  } catch (e) {
+  } catch {
     return dateString;
   }
 }

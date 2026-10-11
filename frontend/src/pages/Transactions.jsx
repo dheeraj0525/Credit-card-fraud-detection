@@ -3,9 +3,8 @@ import { useFraudScore } from "../hooks/useFraudScore";
 import { useTransactionStore } from "../store/TransactionStore";
 import TransactionTable from "../components/transactions/TransactionTable";
 import { SAMPLE_DATA } from "../utils/constants";
-import { formatCurrency } from "../utils/formatcurrency";
 import { getRiskColorClass } from "../utils/riskColor";
-import { Play, UploadCloud, History, Layers, Clipboard, AlertCircle } from "lucide-react";
+import { Play, UploadCloud, History, AlertCircle, Cpu, FileSpreadsheet, SlidersHorizontal } from "lucide-react";
 
 export function Transactions() {
   const [activeTab, setActiveTab] = useState("single"); // "single", "batch", "history"
@@ -72,7 +71,6 @@ export function Transactions() {
     }
   };
 
-  // Generate mock SHAP explainability elements based on current form inputs
   const shapFeatures = [
     { feature: "V17 (Fraud Component)", impact: formData.V17 < -2 ? 0.38 : -0.05, value: formData.V17 },
     { feature: "V14 (Card Validation)", impact: formData.V14 < -2 ? 0.29 : -0.02, value: formData.V14 },
@@ -84,45 +82,55 @@ export function Transactions() {
   return (
     <div className="flex-1 flex flex-col gap-6">
       {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-100">XGBoost Transaction Scorer</h1>
-        <p className="text-sm text-slate-400">Classify individual card charges or process batch CSV payloads through the inference model.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800/60 pb-5">
+        <div>
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight text-slate-100 font-sans flex items-center gap-2">
+            XGBoost Transaction Scorer & Evaluator
+          </h1>
+          <p className="text-xs md:text-sm text-slate-400 mt-1">
+            Perform real-time machine learning scoring on single transactions or stream bulk CSV payloads.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-mono shrink-0">
+          <Cpu className="h-3.5 w-3.5" />
+          <span>INFERENCE ENGINE READY</span>
+        </div>
       </div>
 
-      {/* Tabs Controller */}
-      <div className="flex border-b border-slate-800 gap-4">
+      {/* Navigation Tabs Controller */}
+      <div className="flex border-b border-slate-800/80 gap-2 md:gap-4 overflow-x-auto">
         <button
           onClick={() => setActiveTab("single")}
-          className={`pb-3 text-sm font-semibold transition-colors cursor-pointer border-b-2 flex items-center gap-2 ${
+          className={`pb-3 px-3 text-xs md:text-sm font-semibold transition-all cursor-pointer border-b-2 flex items-center gap-2 whitespace-nowrap ${
             activeTab === "single"
-              ? "border-blue-500 text-white"
+              ? "border-blue-500 text-blue-400 font-bold"
               : "border-transparent text-slate-400 hover:text-slate-200"
           }`}
         >
           <Play className="h-4 w-4" />
-          Single Transaction Scorer
+          <span>Single Transaction Scorer</span>
         </button>
         <button
           onClick={() => setActiveTab("batch")}
-          className={`pb-3 text-sm font-semibold transition-colors cursor-pointer border-b-2 flex items-center gap-2 ${
+          className={`pb-3 px-3 text-xs md:text-sm font-semibold transition-all cursor-pointer border-b-2 flex items-center gap-2 whitespace-nowrap ${
             activeTab === "batch"
-              ? "border-blue-500 text-white"
+              ? "border-blue-500 text-blue-400 font-bold"
               : "border-transparent text-slate-400 hover:text-slate-200"
           }`}
         >
           <UploadCloud className="h-4 w-4" />
-          Batch CSV Upload
+          <span>Batch CSV Inferences</span>
         </button>
         <button
           onClick={() => setActiveTab("history")}
-          className={`pb-3 text-sm font-semibold transition-colors cursor-pointer border-b-2 flex items-center gap-2 ${
+          className={`pb-3 px-3 text-xs md:text-sm font-semibold transition-all cursor-pointer border-b-2 flex items-center gap-2 whitespace-nowrap ${
             activeTab === "history"
-              ? "border-blue-500 text-white"
+              ? "border-blue-500 text-blue-400 font-bold"
               : "border-transparent text-slate-400 hover:text-slate-200"
           }`}
         >
           <History className="h-4 w-4" />
-          Evaluation Logs ({transactions.length})
+          <span>Scoring Audit Logs ({transactions.length})</span>
         </button>
       </div>
 
@@ -131,81 +139,94 @@ export function Transactions() {
         {activeTab === "single" && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
             {/* Scorer Form */}
-            <form onSubmit={handleSubmit} className="lg:col-span-2 bg-slate-900/60 border border-slate-800 rounded-xl p-6 flex flex-col gap-6">
-              <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-                <h3 className="font-bold text-slate-200">Evaluate Parameters</h3>
+            <form onSubmit={handleSubmit} className="lg:col-span-2 soc-card p-6 flex flex-col gap-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+                <div>
+                  <h3 className="font-bold text-slate-200 text-sm font-sans">Transaction Latent Vector Input</h3>
+                  <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">PCA FEATURES V1 - V28</span>
+                </div>
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => loadSample("safe")}
-                    className="px-2.5 py-1 text-xxs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded hover:bg-emerald-500/20 cursor-pointer"
+                    className="px-3 py-1.5 text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-lg hover:bg-emerald-500/20 cursor-pointer transition-colors"
                   >
-                    Template: Safe
+                    Preset: Safe Baseline
                   </button>
                   <button
                     type="button"
                     onClick={() => loadSample("fraud")}
-                    className="px-2.5 py-1 text-xxs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 rounded hover:bg-red-500/20 cursor-pointer"
+                    className="px-3 py-1.5 text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/20 cursor-pointer transition-colors"
                   >
-                    Template: Fraud
+                    Preset: Fraud Vector
                   </button>
                 </div>
               </div>
 
+              {error && (
+                <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-3.5 py-2.5 rounded-lg">
+                  {error}
+                </div>
+              )}
+
               {/* Core Fields */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1">Customer ID</label>
+                  <label className="text-xs font-semibold text-slate-400 block mb-1.5">Customer Identifier</label>
                   <input
                     type="text"
                     name="customer_id"
                     value={formData.customer_id}
                     onChange={handleInputChange}
-                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
+                    className="soc-input font-mono"
                     required
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1">Charge Amount ($)</label>
+                  <label className="text-xs font-semibold text-slate-400 block mb-1.5">Transaction Amount ($)</label>
                   <input
                     type="number"
                     step="0.01"
                     name="Amount"
                     value={formData.Amount}
                     onChange={handleInputChange}
-                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
+                    className="soc-input font-mono"
                     required
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-400 block mb-1">Inference Time Metric</label>
+                  <label className="text-xs font-semibold text-slate-400 block mb-1.5">Elapsed Time Delta (sec)</label>
                   <input
                     type="number"
                     name="Time"
                     value={formData.Time}
                     onChange={handleInputChange}
-                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-sm text-slate-200 focus:border-blue-500 focus:outline-none"
+                    className="soc-input font-mono"
                     required
                   />
                 </div>
               </div>
 
-              {/* PCA Latent Features V1-V28 Toggle */}
-              <div className="border-t border-slate-800 pt-4">
-                <label className="text-xs font-semibold text-slate-400 block mb-3">
-                  PCA Latent Dimension Features (V1 - V28)
-                </label>
-                <div className="grid grid-cols-4 md:grid-cols-7 gap-3">
+              {/* PCA Latent Features V1-V28 */}
+              <div className="border-t border-slate-800/80 pt-4">
+                <div className="flex justify-between items-center mb-3">
+                  <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                    <SlidersHorizontal className="h-3.5 w-3.5 text-blue-400" />
+                    PCA Dimensional Components ($V_1$ to $V_{28}$)
+                  </label>
+                  <span className="text-[10px] font-mono text-slate-500">Continuous Latent Space</span>
+                </div>
+                <div className="grid grid-cols-4 sm:grid-cols-7 gap-2.5">
                   {Array.from({ length: 28 }, (_, i) => i + 1).map((idx) => (
                     <div key={idx} className="flex flex-col gap-1">
-                      <span className="text-[10px] text-slate-500 font-mono">V{idx}</span>
+                      <span className="text-[10px] text-slate-400 font-mono font-bold text-center">V{idx}</span>
                       <input
                         type="number"
                         step="0.000001"
                         name={`V${idx}`}
                         value={formData[`V${idx}`]}
                         onChange={handleInputChange}
-                        className="bg-slate-950 border border-slate-800 rounded px-1.5 py-1 text-center font-mono text-xs text-slate-300 focus:border-blue-500 focus:outline-none"
+                        className="bg-slate-950/80 border border-slate-800 rounded px-1.5 py-1 text-center font-mono text-xs text-slate-200 focus:border-blue-500 focus:outline-none"
                       />
                     </div>
                   ))}
@@ -215,26 +236,29 @@ export function Transactions() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded font-bold text-sm tracking-wide transition-colors cursor-pointer"
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg font-bold text-sm tracking-wide transition-all cursor-pointer shadow-lg shadow-blue-950/40 flex items-center justify-center gap-2"
               >
-                {loading ? "Computing XGBoost score..." : "Execute Real-Time Scoring"}
+                <Cpu className="h-4 w-4" />
+                <span>{loading ? "Calculating XGBoost Inference..." : "Execute Real-Time Scoring"}</span>
               </button>
             </form>
 
             {/* Results Sidebar */}
             <div className="lg:col-span-1 flex flex-col gap-6">
-              {/* Classification Result Card */}
-              <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-6 flex flex-col gap-4">
-                <h3 className="font-bold text-slate-200 border-b border-slate-800 pb-3">ML Decision Matrix</h3>
+              <div className="soc-card p-6 flex flex-col gap-4">
+                <div className="flex justify-between items-center border-b border-slate-800/80 pb-3">
+                  <h3 className="font-bold text-slate-200 text-sm font-sans">ML Decision Matrix</h3>
+                  <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider">PREDICTION MATRIX</span>
+                </div>
 
                 {result ? (
                   <div className="flex flex-col gap-4">
-                    <div className="flex flex-col items-center py-4 bg-slate-950 rounded-lg border border-slate-800">
-                      <span className="text-xxs font-semibold text-slate-500 uppercase tracking-widest">Fraud Probability</span>
-                      <span className={`text-4xl font-extrabold font-mono mt-1 ${result.risk_level === "HIGH" ? "text-red-500" : result.risk_level === "MEDIUM" ? "text-amber-500" : "text-emerald-500"}`}>
+                    <div className="flex flex-col items-center py-6 bg-slate-950/80 rounded-xl border border-slate-850 shadow-inner">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">Fraud Probability Score</span>
+                      <span className={`text-4xl font-extrabold font-mono mt-1 ${result.risk_level === "HIGH" || result.risk_level === "FRAUD" ? "text-red-400" : result.risk_level === "MEDIUM" ? "text-amber-400" : "text-emerald-400"}`}>
                         {(result.fraud_probability * 100).toFixed(1)}%
                       </span>
-                      <span className={`mt-2 px-3 py-1 rounded text-xs font-bold border ${getRiskColorClass(result.risk_level)}`}>
+                      <span className={`mt-3 soc-badge ${getRiskColorClass(result.risk_level)}`}>
                         {result.risk_level} RISK
                       </span>
                     </div>
@@ -242,19 +266,19 @@ export function Transactions() {
                     {/* SHAP Explanation visualizer */}
                     <div className="flex flex-col gap-2">
                       <span className="text-xs font-bold text-slate-400 block mb-1">SHAP Local Feature Contribution</span>
-                      <div className="flex flex-col gap-2.5 bg-slate-950 p-3 rounded border border-slate-850">
+                      <div className="flex flex-col gap-3 bg-slate-950/80 p-3.5 rounded-xl border border-slate-850">
                         {shapFeatures.map((f, i) => (
-                          <div key={i} className="flex flex-col gap-1 text-xxs">
-                            <div className="flex justify-between font-mono text-slate-400">
-                              <span>{f.feature} (val: {f.value.toFixed(2)})</span>
-                              <span className={f.impact > 0 ? "text-red-400 font-bold" : "text-emerald-400"}>
+                          <div key={i} className="flex flex-col gap-1 text-xs">
+                            <div className="flex justify-between font-mono text-[11px] text-slate-400">
+                              <span>{f.feature}</span>
+                              <span className={f.impact > 0 ? "text-red-400 font-bold" : "text-emerald-400 font-bold"}>
                                 {f.impact > 0 ? `+${(f.impact * 100).toFixed(0)}%` : `${(f.impact * 100).toFixed(0)}%`}
                               </span>
                             </div>
-                            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                            <div className="h-1.5 w-full bg-slate-850 rounded-full overflow-hidden">
                               <div
-                                className={`h-full rounded-full ${f.impact > 0 ? "bg-red-500" : "bg-emerald-500"}`}
-                                style={{ width: `${Math.abs(f.impact * 100)}%` }}
+                                className={`h-full rounded-full transition-all duration-500 ${f.impact > 0 ? "bg-red-500" : "bg-emerald-500"}`}
+                                style={{ width: `${Math.min(100, Math.abs(f.impact * 100))}%` }}
                               />
                             </div>
                           </div>
@@ -263,7 +287,7 @@ export function Transactions() {
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-12 text-slate-500 text-sm flex flex-col items-center gap-2">
+                  <div className="text-center py-12 text-slate-500 text-xs flex flex-col items-center gap-3 bg-slate-950/40 rounded-xl border border-slate-850">
                     <AlertCircle className="h-8 w-8 text-slate-600" />
                     <span>Run scoring to generate a classification matrix.</span>
                   </div>
@@ -274,18 +298,18 @@ export function Transactions() {
         )}
 
         {activeTab === "batch" && (
-          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-6 flex flex-col gap-6">
+          <div className="soc-card p-6 flex flex-col gap-6 max-w-3xl">
             <div>
-              <h3 className="font-bold text-slate-200">Batch Processing Pipeline</h3>
-              <p className="text-xs text-slate-400 mt-1">Upload a CSV payload containing credit card transaction features (Amount, Time, V1-V28) to run model inferences in bulk.</p>
+              <h3 className="font-bold text-slate-200 text-base font-sans">Batch Dataset Inferences Pipeline</h3>
+              <p className="text-xs text-slate-400 mt-1">Upload credit card transaction CSV files containing latent PCA parameters to run high-throughput batch classification.</p>
             </div>
 
-            <form onSubmit={handleUploadSubmit} className="flex flex-col gap-4 max-w-xl">
-              <div className="border-2 border-dashed border-slate-800 rounded-lg p-8 flex flex-col items-center justify-center bg-slate-950/40 text-center gap-3">
-                <UploadCloud className="h-10 w-10 text-slate-500" />
+            <form onSubmit={handleUploadSubmit} className="flex flex-col gap-4">
+              <div className="border-2 border-dashed border-slate-800 hover:border-blue-500/50 rounded-xl p-8 flex flex-col items-center justify-center bg-slate-950/60 text-center gap-4 transition-colors">
+                <FileSpreadsheet className="h-12 w-12 text-blue-400" />
                 <div>
-                  <span className="text-sm font-semibold text-slate-300 block">Select credit card dataset CSV</span>
-                  <span className="text-xxs text-slate-500 mt-0.5 block">File must contain Time, Amount, V1-V28 columns. Limit 5000 rows.</span>
+                  <span className="text-sm font-semibold text-slate-200 block">Select credit card dataset CSV</span>
+                  <span className="text-xs text-slate-500 mt-1 block">Expected schema: Time, Amount, V1-V28 columns.</span>
                 </div>
                 <input
                   type="file"
@@ -295,29 +319,29 @@ export function Transactions() {
                 />
               </div>
 
-              {uploadError && <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded">{uploadError}</div>}
-              {uploadSuccess && <div className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3 py-2 rounded">{uploadSuccess}</div>}
+              {uploadError && <div className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-3.5 py-2.5 rounded-lg">{uploadError}</div>}
+              {uploadSuccess && <div className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-2.5 rounded-lg">{uploadSuccess}</div>}
 
               <button
                 type="submit"
                 disabled={loading || !uploadFile}
-                className="py-2 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded font-bold text-sm transition-colors cursor-pointer"
+                className="py-2.5 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg font-bold text-sm transition-colors cursor-pointer"
               >
-                {loading ? "Processing CSV..." : "Process Batch Inferences"}
+                {loading ? "Processing batch inferences..." : "Process Batch Inferences"}
               </button>
             </form>
 
             {batchResponse && (
-              <div className="border-t border-slate-800 pt-6 flex flex-col gap-4">
-                <h4 className="font-bold text-slate-200">Batch Performance Metrics</h4>
+              <div className="border-t border-slate-800/80 pt-6 flex flex-col gap-4">
+                <h4 className="font-bold text-slate-200 text-sm">Batch Output Telemetry</h4>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-slate-950 p-4 rounded border border-slate-850">
-                    <span className="text-xxs text-slate-500 font-semibold block uppercase">Processed Rows</span>
-                    <span className="text-2xl font-extrabold text-slate-200 mt-1 block">{batchResponse.total_records_processed}</span>
+                  <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-850">
+                    <span className="text-[10px] text-slate-500 font-semibold block uppercase font-mono">Processed Records</span>
+                    <span className="text-2xl font-extrabold text-slate-200 mt-1 block font-mono">{batchResponse.total_records_processed}</span>
                   </div>
-                  <div className="bg-slate-950 p-4 rounded border border-slate-850">
-                    <span className="text-xxs text-slate-500 font-semibold block uppercase">Fraud Cases Raised</span>
-                    <span className="text-2xl font-extrabold text-red-500 mt-1 block">{batchResponse.fraud_alerts_detected}</span>
+                  <div className="bg-slate-950/80 p-4 rounded-xl border border-slate-850">
+                    <span className="text-[10px] text-slate-500 font-semibold block uppercase font-mono">Flagged Fraud Anomalies</span>
+                    <span className="text-2xl font-extrabold text-red-400 mt-1 block font-mono">{batchResponse.fraud_alerts_detected}</span>
                   </div>
                 </div>
               </div>
@@ -326,8 +350,8 @@ export function Transactions() {
         )}
 
         {activeTab === "history" && (
-          <div className="bg-slate-900/60 border border-slate-800 rounded-xl p-6 flex flex-col gap-4">
-            <h3 className="font-bold text-slate-200">Model Scoring History Log</h3>
+          <div className="soc-card p-6 flex flex-col gap-4">
+            <h3 className="font-bold text-slate-200 text-sm font-sans">Model Scoring History Log</h3>
             <TransactionTable transactions={transactions} onSelect={() => {}} />
           </div>
         )}

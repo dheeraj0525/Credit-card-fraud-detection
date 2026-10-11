@@ -6,19 +6,20 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend)
 
 export function MarchantChart() {
   const data = {
-    labels: ["Luxury Goods", "Amazon Store", "Unknown E-com", "Walmart", "Chevron Gas"],
+    labels: ["Luxury Retail", "Global E-Com", "Digital Gaming", "Electronics", "Petroleum / Fuel"],
     datasets: [
       {
         label: "Fraud Risk Coefficient",
-        data: [0.89, 0.35, 0.68, 0.21, 0.08],
+        data: [0.89, 0.68, 0.42, 0.24, 0.08],
         backgroundColor: [
           "#ef4444",
-          "#3b82f6",
           "#f59e0b",
+          "#3b82f6",
           "#10b981",
           "#10b981"
         ],
-        borderRadius: 4,
+        borderRadius: 6,
+        barThickness: 16,
       },
     ],
   };
@@ -32,26 +33,37 @@ export function MarchantChart() {
         display: false,
       },
       tooltip: {
+        backgroundColor: "#0f172a",
+        titleColor: "#f8fafc",
+        bodyColor: "#cbd5e1",
+        borderColor: "#1e293b",
+        borderWidth: 1,
+        padding: 8,
+        cornerRadius: 6,
         callbacks: {
-          label: (ctx) => `Risk: ${(ctx.raw * 100).toFixed(0)}%`
+          label: (ctx) => `Risk Factor: ${(ctx.raw * 100).toFixed(0)}%`
         }
       }
     },
     scales: {
       x: {
-        grid: { color: "#273549" },
-        ticks: { color: "#94a3b8" },
+        grid: { color: "rgba(255, 255, 255, 0.04)" },
+        ticks: {
+          color: "#64748b",
+          font: { family: "JetBrains Mono", size: 10 },
+          callback: (val) => `${(val * 100).toFixed(0)}%`
+        },
         max: 1.0,
       },
       y: {
-        grid: { color: "#273549" },
-        ticks: { color: "#94a3b8" },
+        grid: { display: false },
+        ticks: { color: "#94a3b8", font: { family: "Inter", size: 11, weight: "500" } },
       },
     },
   };
 
   return (
-    <div className="h-64 w-full">
+    <div className="h-60 w-full">
       <Bar data={data} options={options} />
     </div>
   );

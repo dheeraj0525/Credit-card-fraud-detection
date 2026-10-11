@@ -29,6 +29,7 @@ export const useAlertStore = create((set, get) => ({
       set({ activeBannerAlert: null });
       await get().fetchNotifications();
     } catch (e) {
+      console.error("Error dismissing notification:", e);
       set({ activeBannerAlert: null });
     }
   }

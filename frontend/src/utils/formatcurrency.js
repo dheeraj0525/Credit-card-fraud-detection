@@ -5,7 +5,7 @@ export function formatCurrency(amount) {
       style: "currency",
       currency: "USD",
     }).format(amount);
-  } catch (e) {
+  } catch {
     return `$${Number(amount).toFixed(2)}`;
   }
 }
